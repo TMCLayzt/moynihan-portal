@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fellowship Portal | The Moynihan Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/portal.css">
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════
+     LOGIN SCREEN
+════════════════════════════════════════ -->
+<div id="loginScreen">
+  <div class="login-header">
+    <div class="login-header-brand">
+      <div class="login-header-logo">MC</div>
+      <span class="login-header-name">The Moynihan Center &mdash; Fellowship Portal</span>
+    </div>
+  </div>
+  <div class="login-body">
+    <div class="login-card">
+      <div class="login-eyebrow">Fall 2025 &mdash; PSC 31180 &amp; PSC 31330</div>
+      <div class="login-title">Sign in to your<br><strong>Fellowship Portal</strong></div>
+      <div class="login-error" id="loginError">Incorrect username or password. Please try again.</div>
+      <div class="login-field">
+        <label class="login-label" for="loginUser">Username</label>
+        <input class="login-input" id="loginUser" type="text" placeholder="Enter your username" autocomplete="username">
+      </div>
+      <div class="login-field">
+        <label class="login-label" for="loginPass">Password</label>
+        <input class="login-input" id="loginPass" type="password" placeholder="Enter your password" autocomplete="current-password">
+      </div>
+      <button class="login-btn" onclick="attemptLogin()">
+        Sign in
+        <svg style="margin-left:10px;vertical-align:-2px" width="36" height="14" viewBox="0 0 90 37" fill="currentColor"><path d="M68.303 33.788l3.203 3.202L90 18.496 71.506 0l-3.203 3.202 13.028 13.029H0v4.528h81.331L68.303 33.788z"/></svg>
+      </button>
+    </div>
+    <div class="login-hint">
+      Sign in with your username and password.<br>
+      <span style="color:rgba(255,255,255,0.4);font-size:12px">Contact your instructor if you need your login.</span>
+    </div>
+  </div>
+  <div class="login-footer">&copy; 2025 The Moynihan Center &mdash; The City College of New York</div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     PORTAL APP (hidden until login)
+════════════════════════════════════════ -->
+<div id="portalApp">
+
+<!-- TOPBAR -->
+<header>
+  <div class="topbar">
+    <div class="topbar-inner">
+      <a class="topbar-brand" href="#">
+        <div class="topbar-logo">MC</div>
+        <span class="topbar-name">The Moynihan Center &mdash; Fellowship Portal</span>
+      </a>
+      <div class="topbar-user">
+        <div style="position:relative">
+          <div class="topbar-user-avatar" id="userAvatar" onclick="toggleUserDropdown()">ST</div>
+          <div class="topbar-dropdown" id="userDropdown">
+            <div class="topbar-dropdown-header">
+              <div class="topbar-dropdown-name" id="dropdownName">Student</div>
+              <div class="topbar-dropdown-role" id="dropdownRole">Student</div>
+            </div>
+            <!-- Only shown for students -->
+            <button class="topbar-dropdown-item student-only" onclick="openChangePassword()">
+              &#128274; Change password
+            </button>
+            <hr class="topbar-dropdown-divider">
+            <button class="topbar-dropdown-item danger" onclick="logout()">
+              &#8592; Log out
+            </button>
+          </div>
+        </div>
+        <span class="topbar-user-name" id="userName">Student</span>
+        <button class="logout-btn" onclick="logout()">Log out</button>
+      </div>
+    </div>
+  </div>
+
+  <nav class="subnav" aria-label="Main navigation">
+    <div class="subnav-inner">
+      <a class="subnav-link active" onclick="showView('dashboard')">Dashboard</a>
+      <a class="subnav-link" onclick="showView('calendar')">Calendar</a>
+      <a class="subnav-link" onclick="showView('modules')">Syllabus</a>
+      <a class="subnav-link admin-only" onclick="showView('admin')" id="adminNavLink" style="margin-left:auto;color:rgba(255,255,255,0.5);border-left:1px solid #444;padding-left:20px">&#9881; Admin</a>
+    </div>
+  </nav>
+</header>
+
+<!-- PANEL OVERLAY -->
+<div class="panel-overlay" id="panelOverlay" onclick="closePanel()"></div>
+
+<!-- SIDE PANEL -->
+<div class="side-panel" id="sidePanel">
+  <div class="panel-header" id="panelHeader">
+    <div class="panel-header-ghost" id="panelGhost"></div>
+    <div class="panel-header-inner">
+      <button class="panel-close" onclick="closePanel()" aria-label="Close">&#10005;</button>
+      <div class="panel-eyebrow" id="panelEyebrow">Fellowship Calendar</div>
+      <div class="panel-date-big" id="panelDateBig"></div>
+      <div class="panel-date-year" id="panelDateYear"></div>
+    </div>
+    <div class="panel-count-strip" id="panelCountStrip">
+      <span id="panelCountLabel"></span>
+      <button class="panel-add-inline" id="panelAddBtn" onclick="showAddForm()">+ Add event</button>
+    </div>
+  </div>
+  <div class="panel-body" id="panelBody"></div>
+  <div class="panel-footer" id="panelFooter" style="display:none"></div>
+</div>
+
+<main>
+
+<!-- ═══════════════════════════════════════
+     DASHBOARD VIEW
+════════════════════════════════════════ -->
+<div id="view-dashboard" class="view active">
+  <div class="page-hero">
+    <div class="page-hero-inner">
+      <div>
+        <div class="page-hero-meta">PSC 31180 &mdash; Power, Politics, and Policy in NYC</div>
+        <h1>Welcome back, <strong>Layana.</strong><br>Fall 2025 is underway.</h1>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px;">
+        <button class="cta-arrow" onclick="showView('calendar')">
+          View full calendar
+          <svg width="60" height="24" viewBox="0 0 90 37" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M68.303 33.788l3.203 3.202L90 18.496 71.506 0l-3.203 3.202 13.028 13.029H0v4.528h81.331L68.303 33.788z" fill="currentColor"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+  <div class="container">
+    <div class="section">
+      <div class="grid-2">
+        <div>
+          <div id="dashboardAnnouncements"></div>
+        </div>
+        <div>
+          <div class="section-label">What's due</div>
+          <div class="deadline-timeline" id="upcomingDeadlines"></div>
+          <button class="cta-arrow" style="margin-top:0.5rem" onclick="showView('calendar')">
+            See all on calendar
+            <svg width="50" height="20" viewBox="0 0 90 37" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M68.303 33.788l3.203 3.202L90 18.496 71.506 0l-3.203 3.202 13.028 13.029H0v4.528h81.331L68.303 33.788z" fill="currentColor"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-label">Upcoming sessions &amp; events</div>
+      <div class="event-strip" id="upcomingEvents"></div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════
+     CALENDAR VIEW
+════════════════════════════════════════ -->
+<div id="view-calendar" class="view">
+  <div class="page-hero">
+    <div class="page-hero-inner">
+      <div>
+        <div class="page-hero-meta">PSC 31180 &mdash; Power, Politics, and Policy in NYC</div>
+        <h1>Fall 2025 <strong>Course Calendar</strong></h1>
+      </div>
+      <button class="btn-sm btn-primary admin-only" onclick="openAddForm(null)">+ Add event</button>
+    </div>
+  </div>
+  <div class="container">
+    <div class="cal-wrap">
+      <div class="cal-controls">
+        <div style="display:flex;align-items:center;gap:14px;">
+          <button class="btn-sm" onclick="changeMonth(-1)">&#8592; Prev</button>
+          <span class="cal-month-title" id="calMonthTitle"></span>
+          <button class="btn-sm" onclick="changeMonth(1)">Next &#8594;</button>
+        </div>
+      </div>
+      <div class="cal-filter-bar" id="calFilterBar"></div>
+      <div class="cal-legend" id="calLegend"></div>
+      <div class="cal-grid-header" id="calGridHeader"></div>
+      <div class="cal-grid" id="calGrid"></div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════
+     SYLLABUS VIEW
+════════════════════════════════════════ -->
+<div id="view-modules" class="view">
+  <div id="modules-list-view">
+    <div class="page-hero">
+      <div class="page-hero-inner">
+        <div>
+          <div class="page-hero-meta" id="syllabusHeroMeta">Curriculum</div>
+          <h1 id="syllabusHeroTitle">Fall 2025 <strong>Syllabus</strong></h1>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:12px">
+          <div id="syllabusHeroSub" style="font-size:12px;color:var(--gray-mid);text-align:right;line-height:1.6"></div>
+          <div class="syl-course-switcher" id="sylCourseSwitcher">
+            <button class="syl-course-btn active" id="syl-tab-psc31180" onclick="switchCourseInline('psc31180')">
+              <span class="syl-course-dot" style="background:#8B1A1A"></span>
+              PSC 31180
+            </button>
+            <button class="syl-course-btn" id="syl-tab-psc31330" onclick="switchCourseInline('psc31330')">
+              <span class="syl-course-dot" style="background:#185FA5"></span>
+              TAP 31330
+            </button>
+            <button class="syl-course-btn" id="syl-tab-all" onclick="switchCourseInline('all')">
+              <span class="syl-course-dot" style="background:#BA7517"></span>
+              All
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="container">
+      <div class="section" style="padding-top:2rem">
+        <div id="syllabusAccordion"></div>
+      </div>
+    </div>
+  </div>
+  <div id="module-detail-view" style="display:none;">
+    <div class="back-bar"><div class="container" style="padding:0 2rem;">
+      <button class="back-btn" onclick="closeModuleDetail()">&#8592; Back to syllabus</button>
+    </div></div>
+    <div class="module-hero"><div class="module-hero-inner">
+      <div class="module-hero-label" id="detailLabel"></div>
+      <h2 id="detailTitle"></h2><p id="detailDesc"></p>
+    </div></div>
+    <div class="container"><div class="section"><div class="grid-2">
+      <div><div class="section-label">Deliverables</div><div id="detailDeliverables"></div></div>
+      <div><div class="section-label">Sessions</div><div id="detailSessions"></div></div>
+    </div></div></div>
+  </div>
+</div>
+
+<div id="view-resources" class="view"></div>
+
+<!-- ═══════════════════════════════════════
+     ADMIN VIEW
+════════════════════════════════════════ -->
+<div id="view-admin" class="view admin-only">
+  <div class="page-hero" style="background:var(--gray-brand);border-bottom:none">
+    <div class="page-hero-inner">
+      <div>
+        <div class="page-hero-meta" style="color:rgba(255,255,255,0.5)">Admin Panel &mdash; Instructor Access Only</div>
+        <h1 style="color:white">Course <strong>Management</strong></h1>
+      </div>
+      <div style="display:flex;gap:10px" id="adminCourseIndicator"></div>
+    </div>
+  </div>
+
+  <div class="admin-tab-bar">
+    <button class="admin-tab active" onclick="switchAdminTab('announcements')">Announcements</button>
+    <button class="admin-tab" onclick="switchAdminTab('events')">Events</button>
+    <button class="admin-tab" onclick="switchAdminTab('rsvps')">RSVPs</button>
+    <button class="admin-tab" onclick="switchAdminTab('syllabus')">Syllabus</button>
+    <button class="admin-tab" onclick="switchAdminTab('students')">Students</button>
+    <button class="admin-tab" onclick="switchAdminTab('users')">Admin users</button>
+    <button class="admin-tab" onclick="switchAdminTab('settings')">Settings</button>
+  </div>
+
+  <div class="container" style="padding-top:2rem;padding-bottom:3rem">
+
+    <!-- ── ANNOUNCEMENTS ── -->
+    <div class="admin-panel active" id="apanel-announcements">
+      <div class="admin-section-header">
+        <div>
+          <div class="admin-section-title">Announcements</div>
+          <div class="admin-section-sub">Visible to students on the dashboard.</div>
+        </div>
+      </div>
+      <div class="admin-form-card">
+        <div class="admin-form-title">New announcement</div>
+        <div class="admin-row-2">
+          <div class="form-group"><label class="form-label">Title</label><input class="form-input" id="ann-title" type="text" placeholder="e.g. Office hours moved this week"></div>
+          <div class="form-group"><label class="form-label">Colour</label>
+            <select class="form-input" id="ann-color">
+              <option value="maroon">Maroon (default)</option>
+              <option value="blue">Blue (info)</option>
+              <option value="orange">Orange (action needed)</option>
+              <option value="amber">Amber (reminder)</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group"><label class="form-label">Body</label><textarea class="form-input" id="ann-body" rows="3" placeholder="Write your announcement…"></textarea></div>
+        <button class="admin-btn-primary" onclick="addAnnouncement()">Post announcement</button>
+      </div>
+      <div class="admin-section-title" style="margin-top:2rem;margin-bottom:1rem">Live announcements</div>
+      <div id="adminAnnouncementList"></div>
+    </div>
+
+    <!-- ── EVENTS ── -->
+    <div class="admin-panel" id="apanel-events">
+      <div class="admin-section-header">
+        <div>
+          <div class="admin-section-title">Add event to calendar</div>
+          <div class="admin-section-sub">Events appear on the course calendar and in the dashboard events strip.</div>
+        </div>
+      </div>
+      <div class="admin-form-card">
+        <div class="admin-form-title">New event</div>
+        <div class="admin-row-3">
+          <div class="form-group"><label class="form-label">Title</label><input class="form-input" id="ev-title" type="text" placeholder="e.g. Guest: Jane Smith"></div>
+          <div class="form-group"><label class="form-label">Date</label><input class="form-input" id="ev-date" type="date"></div>
+          <div class="form-group"><label class="form-label">Category</label>
+            <select class="form-input" id="ev-cat">
+              <option value="lecture">Lecture / class</option>
+              <option value="guest">Guest speaker</option>
+              <option value="homework">Homework deadline</option>
+              <option value="milestone">Student milestone</option>
+              <option value="application">Application deadline</option>
+              <option value="reading">Reading / prep</option>
+            </select>
+          </div>
+        </div>
+        <div class="admin-row-2">
+          <div class="form-group"><label class="form-label">Location / note</label><input class="form-input" id="ev-note" type="text" placeholder="e.g. NAC 4/133 · 3:30–5:00 PM"></div>
+          <div class="form-group"><label class="form-label">Course</label>
+            <select class="form-input" id="ev-course">
+              <option value="psc31180">PSC 31180 — Power, Politics &amp; Policy</option>
+              <option value="psc31330">PSC 31330 — Truth and Politics (TAP)</option>
+              <option value="joint">Joint / both cohorts</option>
+            </select>
+          </div>
+        </div>
+        <button class="admin-btn-primary" onclick="adminAddEvent()">Add to calendar</button>
+      </div>
+      <div class="admin-section-title" style="margin-top:2rem;margin-bottom:1rem">All events <span id="eventsCount" style="font-weight:400;color:var(--gray-mid)"></span></div>
+      <div class="admin-filter-bar">
+        <button class="admin-filter active" onclick="filterEvents('all',this)">All</button>
+        <button class="admin-filter" onclick="filterEvents('psc31180',this)">PSC 31180</button>
+        <button class="admin-filter" onclick="filterEvents('psc31330',this)">TAP</button>
+        <button class="admin-filter" onclick="filterEvents('joint',this)">Joint</button>
+      </div>
+      <div id="adminEventList"></div>
+    </div>
+
+    <!-- ── RSVPs ── -->
+    <div class="admin-panel" id="apanel-rsvps">
+      <div class="admin-section-header">
+        <div>
+          <div class="admin-section-title">RSVP tracker</div>
+          <div class="admin-section-sub">Track who has confirmed attendance for guest speaker and joint events.</div>
+        </div>
+      </div>
+      <div class="admin-rsvp-summary" id="rsvpSummary"></div>
+      <div class="admin-section-title" style="margin-top:2rem;margin-bottom:1rem">RSVPable events</div>
+      <div id="adminRsvpList"></div>
+    </div>
+
+    <!-- ── SYLLABUS EDITOR ── -->
+    <div class="admin-panel" id="apanel-syllabus">
+      <div class="admin-section-header">
+        <div>
+          <div class="admin-section-title">Syllabus editor</div>
+          <div class="admin-section-sub">Edit module descriptions, progress, status, and dates.</div>
+        </div>
+      </div>
+      <div id="adminSyllabusList"></div>
+    </div>
+
+    <!-- ── STUDENTS ── -->
+    <div class="admin-panel" id="apanel-students">
+      <div class="admin-section-header">
+        <div>
+          <div class="admin-section-title">Student roster</div>
+          <div class="admin-section-sub">Manage enrolled students. Default password for all new accounts: <strong>moynihan2025</strong></div>
+        </div>
+      </div>
+
+      <!-- CSV import -->
+      <div class="admin-form-card" style="margin-bottom:1.5rem">
+        <div class="admin-form-title">Import from spreadsheet (CSV)</div>
+        <div style="font-size:12px;color:var(--gray-mid);margin-bottom:1rem">
+          CSV must have columns: <strong>name</strong>, <strong>email</strong>, <strong>course</strong> (psc31180 or psc31330).
+          <a id="csvTemplateLink" href="#" onclick="downloadCsvTemplate(event)" style="color:var(--maroon);font-weight:600">Download template</a>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <input type="file" id="csvFileInput" accept=".csv" style="font-size:13px">
+          <button class="admin-btn-primary" onclick="importStudentsCSV()">Upload &amp; import</button>
+        </div>
+        <div id="csvImportResult" style="margin-top:0.75rem;font-size:13px;color:var(--gray-mid)"></div>
+      </div>
+
+      <div class="admin-form-card">
+        <div class="admin-form-title">Add student manually</div>
+        <div class="admin-row-3">
+          <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="stu-name" type="text" placeholder="Full name"></div>
+          <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="stu-email" type="email" placeholder="@ccny.cuny.edu"></div>
+          <div class="form-group"><label class="form-label">Course</label>
+            <select class="form-input" id="stu-course">
+              <option value="psc31180">PSC 31180</option>
+              <option value="psc31330">PSC 31330 (TAP)</option>
+            </select>
+          </div>
+        </div>
+        <button class="admin-btn-primary" onclick="addStudent()">Add student</button>
+      </div>
+
+      <div class="admin-section-title" style="margin-top:2rem;margin-bottom:1rem">Enrolled students <span id="studentCount" style="font-weight:400;color:var(--gray-mid)"></span></div>
+      <div id="adminStudentList"></div>
+    </div>
+
+    <!-- ── ADMIN USERS ── -->
+    <div class="admin-panel" id="apanel-users">
+      <div class="admin-section-header">
+        <div>
+          <div class="admin-section-title">Admin users</div>
+          <div class="admin-section-sub">Manage who has admin access to this portal.</div>
+        </div>
+      </div>
+      <div class="admin-form-card">
+        <div class="admin-form-title">Add admin user</div>
+        <div class="admin-row-3">
+          <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="au-name" type="text" placeholder="Full name"></div>
+          <div class="form-group"><label class="form-label">Username</label><input class="form-input" id="au-username" type="text" placeholder="e.g. layana" autocomplete="off"></div>
+          <div class="form-group"><label class="form-label">Temporary password</label><input class="form-input" id="au-password" type="text" placeholder="e.g. temp1234" autocomplete="off"></div>
+        </div>
+        <div class="admin-row-2">
+          <div class="form-group"><label class="form-label">Role</label>
+            <select class="form-input" id="au-role">
+              <option value="admin">Admin — full access</option>
+              <option value="instructor">Instructor — syllabus &amp; announcements only</option>
+              <option value="coordinator">Coordinator — events &amp; RSVPs only</option>
+            </select>
+          </div>
+          <div class="form-group"><label class="form-label">Course access</label>
+            <select class="form-input" id="au-course">
+              <option value="both">Both courses</option>
+              <option value="psc31180">PSC 31180 only</option>
+              <option value="psc31330">PSC 31330 only</option>
+            </select>
+          </div>
+        </div>
+        <button class="admin-btn-primary" onclick="addAdminUser()">Add admin</button>
+      </div>
+      <div class="admin-section-title" style="margin-top:2rem;margin-bottom:1rem">
+        Active admins <span id="adminUserCount" style="font-weight:400;color:var(--gray-mid)"></span>
+      </div>
+      <div id="adminUserList"></div>
+    </div>
+
+    <!-- ── SETTINGS ── -->
+    <div class="admin-panel" id="apanel-settings">
+      <div class="admin-section-header">
+        <div>
+          <div class="admin-section-title">Course settings</div>
+          <div class="admin-section-sub">Configure course info, instructor details, and portal behaviour.</div>
+        </div>
+      </div>
+      <div class="admin-form-card">
+        <div class="admin-form-title">PSC 31180 &mdash; Power, Politics, and Policy in NYC</div>
+        <div class="admin-row-2">
+          <div class="form-group"><label class="form-label">Instructor name</label><input class="form-input" value="Layana Abu Touq"></div>
+          <div class="form-group"><label class="form-label">Instructor email</label><input class="form-input" value="Labutouq@ccny.cuny.edu"></div>
+        </div>
+        <div class="admin-row-2">
+          <div class="form-group"><label class="form-label">Location</label><input class="form-input" value="NAC 4/133"></div>
+          <div class="form-group"><label class="form-label">Meeting times</label><input class="form-input" value="Mon/Wed 3:30–4:45 PM"></div>
+        </div>
+        <button class="admin-btn-secondary">Save changes</button>
+      </div>
+      <div class="admin-form-card" style="margin-top:1.5rem">
+        <div class="admin-form-title">PSC 31330 &mdash; Truth and Politics (TAP)</div>
+        <div class="admin-row-2">
+          <div class="form-group"><label class="form-label">Instructor name</label><input class="form-input" value="Dr. Michael Miller"></div>
+          <div class="form-group"><label class="form-label">Instructor email</label><input class="form-input" value="mmiller3@ccny.cuny.edu"></div>
+        </div>
+        <div class="admin-row-2">
+          <div class="form-group"><label class="form-label">Location</label><input class="form-input" value="Shepard Hall 558"></div>
+          <div class="form-group"><label class="form-label">Meeting times</label><input class="form-input" value="Mon/Wed 3:30–4:45 PM"></div>
+        </div>
+        <button class="admin-btn-secondary">Save changes</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <span class="footer-copy">&copy; 2025 The Moynihan Center &mdash; PSC 31180 (Abu Touq) &amp; PSC 31330 (Miller) &mdash; Fall 2025</span>
+    <div class="footer-links">
+      <a href="#">Brightspace</a>
+      <a href="#">CCNY Portal</a>
+      <a href="#">mmiller3@ccny.cuny.edu</a>
+    </div>
+  </div>
+</footer>
+
+<!-- ── CHANGE PASSWORD MODAL ── -->
+<div class="modal-overlay" id="changePasswordModal" onclick="handleModalOverlayClick(event)">
+  <div class="modal-card">
+    <div class="modal-header">
+      <span class="modal-title">Change password</span>
+      <button class="modal-close" onclick="closeChangePassword()">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-success" id="cpSuccess">&#10003; Password updated successfully.</div>
+      <div class="modal-error" id="cpError"></div>
+      <div class="form-group">
+        <label class="form-label">Current password</label>
+        <input class="form-input" id="cpCurrent" type="password" placeholder="Your current password">
+      </div>
+      <div class="form-group">
+        <label class="form-label">New password</label>
+        <input class="form-input" id="cpNew" type="password" placeholder="At least 8 characters">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Confirm new password</label>
+        <input class="form-input" id="cpConfirm" type="password" placeholder="Repeat new password">
+      </div>
+      <button class="admin-btn-primary" style="width:100%;margin-top:0.5rem" onclick="submitChangePassword()">Update password</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- /#portalApp -->
+
+<script src="/static/portal.js"></script>
+</body>
+</html>

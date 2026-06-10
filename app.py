@@ -1,0 +1,584 @@
+import os
+import csv
+import io
+import sqlite3
+from datetime import datetime
+from functools import wraps
+
+import bcrypt
+from flask import Flask, g, jsonify, render_template, request, session
+
+app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-change-in-production')
+
+DATABASE = os.environ.get('DATABASE_URL', 'portal.db')
+DEFAULT_PASSWORD = os.environ.get('DEFAULT_STUDENT_PASSWORD', 'moynihan2025')
+
+
+# ── DATABASE ─────────────────────────────────────────────────────────────────
+
+def get_db():
+    db = getattr(g, '_database', None)
+    if db is None:
+        db = g._database = sqlite3.connect(DATABASE)
+        db.row_factory = sqlite3.Row
+        db.execute('PRAGMA journal_mode=WAL')
+    return db
+
+@app.teardown_appcontext
+def close_db(exception):
+    db = getattr(g, '_database', None)
+    if db is not None:
+        db.close()
+
+def init_db():
+    db = sqlite3.connect(DATABASE)
+    db.executescript('''
+        CREATE TABLE IF NOT EXISTS users (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            username     TEXT    UNIQUE NOT NULL,
+            email        TEXT    DEFAULT '',
+            display_name TEXT    NOT NULL,
+            initials     TEXT    NOT NULL,
+            password_hash TEXT   NOT NULL,
+            role         TEXT    NOT NULL DEFAULT 'student',
+            course       TEXT    DEFAULT 'psc31180',
+            is_active    INTEGER NOT NULL DEFAULT 1,
+            created_at   TEXT    DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS events (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            title      TEXT    NOT NULL,
+            date       TEXT    NOT NULL,
+            cat        TEXT    NOT NULL DEFAULT 'lecture',
+            note       TEXT    DEFAULT '',
+            course     TEXT    NOT NULL DEFAULT 'psc31180',
+            is_hidden  INTEGER NOT NULL DEFAULT 0,
+            is_locked  INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT    DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS announcements (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            title      TEXT    NOT NULL,
+            body       TEXT    NOT NULL,
+            color      TEXT    NOT NULL DEFAULT 'maroon',
+            is_active  INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT    DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS modules (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            label       TEXT    NOT NULL,
+            title       TEXT    NOT NULL,
+            description TEXT    DEFAULT '',
+            progress    INTEGER NOT NULL DEFAULT 0,
+            status      TEXT    NOT NULL DEFAULT 'Upcoming',
+            weeks       TEXT    DEFAULT '',
+            course      TEXT    NOT NULL,
+            order_index INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS sessions (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            module_id   INTEGER NOT NULL,
+            date_label  TEXT    NOT NULL,
+            title       TEXT    NOT NULL,
+            note        TEXT    DEFAULT '',
+            is_joint    INTEGER NOT NULL DEFAULT 0,
+            order_index INTEGER NOT NULL DEFAULT 0,
+            FOREIGN KEY (module_id) REFERENCES modules(id)
+        );
+        CREATE TABLE IF NOT EXISTS deliverables (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            module_id INTEGER NOT NULL,
+            title     TEXT    NOT NULL,
+            due_date  TEXT    NOT NULL,
+            cat       TEXT    NOT NULL DEFAULT 'homework',
+            note      TEXT    DEFAULT '',
+            FOREIGN KEY (module_id) REFERENCES modules(id)
+        );
+        CREATE TABLE IF NOT EXISTS readings (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            module_id   INTEGER NOT NULL,
+            title       TEXT    NOT NULL,
+            when_label  TEXT    NOT NULL,
+            type        TEXT    DEFAULT 'PDF',
+            description TEXT    DEFAULT '',
+            order_index INTEGER NOT NULL DEFAULT 0,
+            FOREIGN KEY (module_id) REFERENCES modules(id)
+        );
+        CREATE TABLE IF NOT EXISTS rsvps (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    INTEGER NOT NULL,
+            event_id   INTEGER NOT NULL,
+            created_at TEXT    DEFAULT (datetime('now')),
+            UNIQUE (user_id, event_id),
+            FOREIGN KEY (user_id)  REFERENCES users(id),
+            FOREIGN KEY (event_id) REFERENCES events(id)
+        );
+    ''')
+    db.commit()
+    db.close()
+
+
+# ── AUTH HELPERS ─────────────────────────────────────────────────────────────
+
+def hash_password(plain):
+    return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
+
+def check_password(plain, hashed):
+    return bcrypt.checkpw(plain.encode(), hashed.encode())
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'user_id' not in session:
+            return jsonify({'error': 'Unauthorized'}), 401
+        return f(*args, **kwargs)
+    return decorated
+
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'user_id' not in session:
+            return jsonify({'error': 'Unauthorized'}), 401
+        if session.get('role') not in ('admin', 'instructor', 'coordinator'):
+            return jsonify({'error': 'Forbidden'}), 403
+        return f(*args, **kwargs)
+    return decorated
+
+def make_initials(name):
+    parts = name.strip().split()
+    return ''.join(p[0] for p in parts if p)[:2].upper()
+
+
+# ── PAGES ────────────────────────────────────────────────────────────────────
+
+@app.route('/')
+def index():
+    return render_template('portal.html')
+
+
+# ── AUTH API ─────────────────────────────────────────────────────────────────
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    data = request.get_json(silent=True) or {}
+    username = (data.get('username') or '').strip().lower()
+    password = data.get('password') or ''
+    if not username or not password:
+        return jsonify({'error': 'Username and password required'}), 400
+    db = get_db()
+    user = db.execute(
+        'SELECT * FROM users WHERE username = ? AND is_active = 1', (username,)
+    ).fetchone()
+    if not user or not check_password(password, user['password_hash']):
+        return jsonify({'error': 'Incorrect username or password'}), 401
+    session['user_id']  = user['id']
+    session['username'] = user['username']
+    session['role']     = user['role']
+    session['course']   = user['course']
+    return jsonify({
+        'role':     user['role'],
+        'display':  user['display_name'],
+        'initials': user['initials'],
+        'course':   user['course'],
+    })
+
+@app.route('/api/logout', methods=['POST'])
+def logout():
+    session.clear()
+    return jsonify({'ok': True})
+
+@app.route('/api/change-password', methods=['POST'])
+@login_required
+def change_password():
+    data = request.get_json(silent=True) or {}
+    current  = data.get('current', '')
+    new_pass = data.get('new', '')
+    confirm  = data.get('confirm', '')
+    db = get_db()
+    user = db.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    if not check_password(current, user['password_hash']):
+        return jsonify({'error': 'Current password is incorrect'}), 400
+    if len(new_pass) < 8:
+        return jsonify({'error': 'New password must be at least 8 characters'}), 400
+    if new_pass != confirm:
+        return jsonify({'error': 'New passwords do not match'}), 400
+    db.execute('UPDATE users SET password_hash = ? WHERE id = ?',
+               (hash_password(new_pass), session['user_id']))
+    db.commit()
+    return jsonify({'ok': True})
+
+
+# ── EVENTS API ───────────────────────────────────────────────────────────────
+
+@app.route('/api/events')
+@login_required
+def get_events():
+    db = get_db()
+    course_filter = request.args.get('course', '')
+    if course_filter:
+        rows = db.execute(
+            'SELECT * FROM events WHERE course = ? ORDER BY date', (course_filter,)
+        ).fetchall()
+    else:
+        rows = db.execute('SELECT * FROM events ORDER BY date').fetchall()
+    return jsonify([dict(r) for r in rows])
+
+@app.route('/api/events', methods=['POST'])
+@admin_required
+def create_event():
+    data = request.get_json(silent=True) or {}
+    title  = (data.get('title') or '').strip()
+    date   = (data.get('date') or '').strip()
+    cat    = data.get('cat', 'lecture')
+    note   = data.get('note', '')
+    course = data.get('course', 'psc31180')
+    if not title or not date:
+        return jsonify({'error': 'Title and date required'}), 400
+    db = get_db()
+    cur = db.execute(
+        'INSERT INTO events (title, date, cat, note, course) VALUES (?,?,?,?,?)',
+        (title, date, cat, note, course)
+    )
+    db.commit()
+    row = db.execute('SELECT * FROM events WHERE id = ?', (cur.lastrowid,)).fetchone()
+    return jsonify(dict(row)), 201
+
+@app.route('/api/events/<int:event_id>', methods=['PATCH'])
+@admin_required
+def update_event(event_id):
+    data = request.get_json(silent=True) or {}
+    db = get_db()
+    row = db.execute('SELECT * FROM events WHERE id = ?', (event_id,)).fetchone()
+    if not row:
+        return jsonify({'error': 'Not found'}), 404
+    fields = {k: v for k, v in data.items() if k in ('title','date','cat','note','course','is_hidden','is_locked')}
+    if not fields:
+        return jsonify({'error': 'No valid fields'}), 400
+    set_clause = ', '.join(f'{k} = ?' for k in fields)
+    db.execute(f'UPDATE events SET {set_clause} WHERE id = ?', (*fields.values(), event_id))
+    db.commit()
+    row = db.execute('SELECT * FROM events WHERE id = ?', (event_id,)).fetchone()
+    return jsonify(dict(row))
+
+@app.route('/api/events/<int:event_id>', methods=['DELETE'])
+@admin_required
+def delete_event(event_id):
+    db = get_db()
+    db.execute('DELETE FROM rsvps WHERE event_id = ?', (event_id,))
+    db.execute('DELETE FROM events WHERE id = ?', (event_id,))
+    db.commit()
+    return jsonify({'ok': True})
+
+
+# ── ANNOUNCEMENTS API ────────────────────────────────────────────────────────
+
+@app.route('/api/announcements')
+@login_required
+def get_announcements():
+    db = get_db()
+    rows = db.execute(
+        'SELECT * FROM announcements WHERE is_active = 1 ORDER BY created_at DESC'
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+@app.route('/api/announcements', methods=['POST'])
+@admin_required
+def create_announcement():
+    data = request.get_json(silent=True) or {}
+    title = (data.get('title') or '').strip()
+    body  = (data.get('body') or '').strip()
+    color = data.get('color', 'maroon')
+    if not title or not body:
+        return jsonify({'error': 'Title and body required'}), 400
+    db = get_db()
+    cur = db.execute(
+        'INSERT INTO announcements (title, body, color) VALUES (?,?,?)', (title, body, color)
+    )
+    db.commit()
+    row = db.execute('SELECT * FROM announcements WHERE id = ?', (cur.lastrowid,)).fetchone()
+    return jsonify(dict(row)), 201
+
+@app.route('/api/announcements/<int:ann_id>', methods=['DELETE'])
+@admin_required
+def delete_announcement(ann_id):
+    db = get_db()
+    db.execute('UPDATE announcements SET is_active = 0 WHERE id = ?', (ann_id,))
+    db.commit()
+    return jsonify({'ok': True})
+
+
+# ── MODULES API ──────────────────────────────────────────────────────────────
+
+@app.route('/api/modules')
+@login_required
+def get_modules():
+    db = get_db()
+    course_filter = request.args.get('course', '')
+    if course_filter:
+        mods = db.execute(
+            'SELECT * FROM modules WHERE course = ? ORDER BY order_index', (course_filter,)
+        ).fetchall()
+    else:
+        mods = db.execute('SELECT * FROM modules ORDER BY course, order_index').fetchall()
+    result = []
+    for m in mods:
+        mid = m['id']
+        sess = db.execute(
+            'SELECT * FROM sessions WHERE module_id = ? ORDER BY order_index', (mid,)
+        ).fetchall()
+        deliv = db.execute(
+            'SELECT * FROM deliverables WHERE module_id = ?', (mid,)
+        ).fetchall()
+        reads = db.execute(
+            'SELECT * FROM readings WHERE module_id = ? ORDER BY order_index', (mid,)
+        ).fetchall()
+        result.append({
+            **dict(m),
+            'sessions':     [dict(s) for s in sess],
+            'deliverables': [dict(d) for d in deliv],
+            'readings':     [dict(r) for r in reads],
+        })
+    return jsonify(result)
+
+@app.route('/api/modules/<int:mod_id>', methods=['PATCH'])
+@admin_required
+def update_module(mod_id):
+    data = request.get_json(silent=True) or {}
+    db = get_db()
+    row = db.execute('SELECT id FROM modules WHERE id = ?', (mod_id,)).fetchone()
+    if not row:
+        return jsonify({'error': 'Not found'}), 404
+    fields = {k: v for k, v in data.items() if k in ('title','description','progress','status','weeks')}
+    if not fields:
+        return jsonify({'error': 'No valid fields'}), 400
+    set_clause = ', '.join(f'{k} = ?' for k in fields)
+    db.execute(f'UPDATE modules SET {set_clause} WHERE id = ?', (*fields.values(), mod_id))
+    db.commit()
+    return jsonify({'ok': True})
+
+
+# ── RSVPs API ────────────────────────────────────────────────────────────────
+
+@app.route('/api/rsvps')
+@login_required
+def get_rsvps():
+    db = get_db()
+    rows = db.execute(
+        'SELECT event_id FROM rsvps WHERE user_id = ?', (session['user_id'],)
+    ).fetchall()
+    return jsonify([r['event_id'] for r in rows])
+
+@app.route('/api/rsvps/<int:event_id>', methods=['POST'])
+@login_required
+def toggle_rsvp(event_id):
+    db = get_db()
+    existing = db.execute(
+        'SELECT id FROM rsvps WHERE user_id = ? AND event_id = ?',
+        (session['user_id'], event_id)
+    ).fetchone()
+    if existing:
+        db.execute('DELETE FROM rsvps WHERE user_id = ? AND event_id = ?',
+                   (session['user_id'], event_id))
+        db.commit()
+        return jsonify({'rsvpd': False})
+    else:
+        db.execute('INSERT INTO rsvps (user_id, event_id) VALUES (?,?)',
+                   (session['user_id'], event_id))
+        db.commit()
+        return jsonify({'rsvpd': True})
+
+@app.route('/api/rsvps/all')
+@admin_required
+def get_all_rsvps():
+    db = get_db()
+    rows = db.execute('''
+        SELECT r.event_id, r.user_id, u.display_name, u.email
+        FROM rsvps r JOIN users u ON u.id = r.user_id
+        ORDER BY r.event_id
+    ''').fetchall()
+    by_event = {}
+    for r in rows:
+        eid = r['event_id']
+        if eid not in by_event:
+            by_event[eid] = []
+        by_event[eid].append({'user_id': r['user_id'], 'name': r['display_name'], 'email': r['email']})
+    return jsonify(by_event)
+
+
+# ── STUDENTS API ─────────────────────────────────────────────────────────────
+
+@app.route('/api/students')
+@admin_required
+def get_students():
+    db = get_db()
+    rows = db.execute(
+        "SELECT id, username, email, display_name, course, is_active FROM users WHERE role = 'student' ORDER BY display_name"
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+@app.route('/api/students', methods=['POST'])
+@admin_required
+def create_student():
+    data = request.get_json(silent=True) or {}
+    name   = (data.get('name') or '').strip()
+    email  = (data.get('email') or '').strip().lower()
+    course = data.get('course', 'psc31180')
+    if not name or not email:
+        return jsonify({'error': 'Name and email required'}), 400
+    username = email.split('@')[0].lower().replace('.', '').replace(' ', '')
+    db = get_db()
+    if db.execute('SELECT id FROM users WHERE username = ?', (username,)).fetchone():
+        return jsonify({'error': f'Username "{username}" already exists'}), 409
+    initials = make_initials(name)
+    pw_hash  = hash_password(DEFAULT_PASSWORD)
+    cur = db.execute(
+        'INSERT INTO users (username, email, display_name, initials, password_hash, role, course) VALUES (?,?,?,?,?,?,?)',
+        (username, email, name, initials, pw_hash, 'student', course)
+    )
+    db.commit()
+    row = db.execute("SELECT id, username, email, display_name, course, is_active FROM users WHERE id = ?", (cur.lastrowid,)).fetchone()
+    return jsonify(dict(row)), 201
+
+@app.route('/api/students/<int:student_id>', methods=['DELETE'])
+@admin_required
+def delete_student(student_id):
+    db = get_db()
+    db.execute("DELETE FROM users WHERE id = ? AND role = 'student'", (student_id,))
+    db.commit()
+    return jsonify({'ok': True})
+
+@app.route('/api/students/import', methods=['POST'])
+@admin_required
+def import_students():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
+    f = request.files['file']
+    content = f.read().decode('utf-8-sig')  # strip BOM if present
+    reader = csv.DictReader(io.StringIO(content))
+    db = get_db()
+    added = 0
+    skipped = 0
+    errors = []
+    pw_hash = hash_password(DEFAULT_PASSWORD)
+    for i, row in enumerate(reader, start=2):
+        name   = (row.get('name') or row.get('Name') or '').strip()
+        email  = (row.get('email') or row.get('Email') or '').strip().lower()
+        course = (row.get('course') or row.get('Course') or 'psc31180').strip().lower()
+        if not name or not email:
+            errors.append(f'Row {i}: missing name or email')
+            continue
+        if course not in ('psc31180', 'psc31330'):
+            course = 'psc31180'
+        username = email.split('@')[0].lower().replace('.', '').replace(' ', '')
+        if db.execute('SELECT id FROM users WHERE username = ?', (username,)).fetchone():
+            skipped += 1
+            continue
+        initials = make_initials(name)
+        db.execute(
+            'INSERT INTO users (username, email, display_name, initials, password_hash, role, course) VALUES (?,?,?,?,?,?,?)',
+            (username, email, name, initials, pw_hash, 'student', course)
+        )
+        added += 1
+    db.commit()
+    return jsonify({'added': added, 'skipped': skipped, 'errors': errors})
+
+@app.route('/api/students/<int:student_id>/reset-password', methods=['POST'])
+@admin_required
+def reset_student_password(student_id):
+    data = request.get_json(silent=True) or {}
+    new_pass = (data.get('password') or DEFAULT_PASSWORD).strip()
+    if len(new_pass) < 6:
+        return jsonify({'error': 'Password too short'}), 400
+    db = get_db()
+    db.execute("UPDATE users SET password_hash = ? WHERE id = ? AND role = 'student'",
+               (hash_password(new_pass), student_id))
+    db.commit()
+    return jsonify({'ok': True})
+
+
+# ── ADMIN USERS API ──────────────────────────────────────────────────────────
+
+@app.route('/api/admin/users')
+@admin_required
+def get_admin_users():
+    db = get_db()
+    rows = db.execute(
+        "SELECT id, username, email, display_name, role, course, is_active FROM users WHERE role != 'student' ORDER BY display_name"
+    ).fetchall()
+    result = []
+    for r in rows:
+        d = dict(r)
+        d['you'] = (r['id'] == session['user_id'])
+        result.append(d)
+    return jsonify(result)
+
+@app.route('/api/admin/users', methods=['POST'])
+@admin_required
+def create_admin_user():
+    data = request.get_json(silent=True) or {}
+    name     = (data.get('name') or '').strip()
+    username = (data.get('username') or '').strip().lower()
+    password = (data.get('password') or '').strip()
+    role     = data.get('role', 'instructor')
+    course   = data.get('course', 'both')
+    if not name or not username or not password:
+        return jsonify({'error': 'Name, username, and password required'}), 400
+    db = get_db()
+    if db.execute('SELECT id FROM users WHERE username = ?', (username,)).fetchone():
+        return jsonify({'error': f'Username "{username}" already taken'}), 409
+    initials = make_initials(name)
+    cur = db.execute(
+        'INSERT INTO users (username, email, display_name, initials, password_hash, role, course) VALUES (?,?,?,?,?,?,?)',
+        (username, '', name, initials, hash_password(password), role, course)
+    )
+    db.commit()
+    row = db.execute('SELECT id, username, display_name, role, course, is_active FROM users WHERE id = ?', (cur.lastrowid,)).fetchone()
+    d = dict(row)
+    d['you'] = False
+    return jsonify(d), 201
+
+@app.route('/api/admin/users/<int:user_id>', methods=['PATCH'])
+@admin_required
+def update_admin_user(user_id):
+    data = request.get_json(silent=True) or {}
+    db = get_db()
+    row = db.execute('SELECT id FROM users WHERE id = ?', (user_id,)).fetchone()
+    if not row:
+        return jsonify({'error': 'Not found'}), 404
+    if 'password' in data:
+        new_pw = data['password'].strip()
+        if len(new_pw) < 6:
+            return jsonify({'error': 'Password too short'}), 400
+        db.execute('UPDATE users SET password_hash = ? WHERE id = ?',
+                   (hash_password(new_pw), user_id))
+    allowed = {k: v for k, v in data.items() if k in ('is_active', 'role', 'course')}
+    if allowed:
+        set_clause = ', '.join(f'{k} = ?' for k in allowed)
+        db.execute(f'UPDATE users SET {set_clause} WHERE id = ?', (*allowed.values(), user_id))
+    db.commit()
+    row = db.execute('SELECT id, username, display_name, role, course, is_active FROM users WHERE id = ?', (user_id,)).fetchone()
+    d = dict(row)
+    d['you'] = (user_id == session['user_id'])
+    return jsonify(d)
+
+@app.route('/api/admin/users/<int:user_id>', methods=['DELETE'])
+@admin_required
+def delete_admin_user(user_id):
+    if user_id == session['user_id']:
+        return jsonify({'error': 'Cannot delete your own account'}), 400
+    db = get_db()
+    db.execute("DELETE FROM users WHERE id = ? AND role != 'student'", (user_id,))
+    db.commit()
+    return jsonify({'ok': True})
+
+
+# ── STARTUP ──────────────────────────────────────────────────────────────────
+
+if __name__ == '__main__':
+    init_db()
+    import seed
+    seed.run()
+    port  = int(os.environ.get('PORT', 5000))
+    debug = os.environ.get('FLASK_ENV') == 'development'
+    app.run(host='0.0.0.0', port=port, debug=debug)
