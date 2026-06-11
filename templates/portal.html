@@ -147,7 +147,10 @@
           <div id="dashboardAnnouncements"></div>
         </div>
         <div>
-          <div class="section-label">What's due</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:0.5rem">
+            <div class="section-label" style="margin:0">What's due</div>
+            <div id="dashWindowToggle" style="display:flex;gap:4px"></div>
+          </div>
           <div class="deadline-timeline" id="upcomingDeadlines"></div>
           <button class="cta-arrow" style="margin-top:0.5rem" onclick="showView('calendar')">
             See all on calendar

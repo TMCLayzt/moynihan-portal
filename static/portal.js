@@ -92,12 +92,13 @@ let calYear  = _now.getFullYear();
 let calMonth = _now.getMonth();
 
 let panelMode = null, selectedDate = null;
-let openModuleId  = null;
-let activeTab     = {};
-let eventsFilter  = 'all';
-let adminSylOpen  = null;
-let showPassFor   = new Set();
-let annWeekFilter = '';
+let openModuleId    = null;
+let activeTab       = {};
+let eventsFilter    = 'all';
+let adminSylOpen    = null;
+let showPassFor     = new Set();
+let annWeekFilter   = '';
+let dashWindow      = 'month'; // 'week' | 'month' | 'all'
 
 
 // ── DATA TRANSFORMS ───────────────────────────────────────────────────────────
@@ -362,15 +363,40 @@ function renderDashboard() {
 
   const today = new Date();
   today.setHours(0,0,0,0);
+
+  // Build "What's due" window toggle
+  const windowEl = document.getElementById('dashWindowToggle');
+  if (windowEl) {
+    windowEl.innerHTML = ['week','month','all'].map(w =>
+      `<button class="dash-window-btn${dashWindow===w?' active':''}" onclick="setDashWindow('${w}')">${w==='week'?'This week':w==='month'?'This month':'All upcoming'}</button>`
+    ).join('');
+  }
+
   const DELIVERABLE_CATS = new Set(['homework','milestone','application']);
-  const dueSoon = courseEvents
+  let dueSoon = courseEvents
     .filter(e => DELIVERABLE_CATS.has(e.cat))
-    .sort((a,b) => a.date.localeCompare(b.date))
-    .slice(0, 6);
+    .sort((a,b) => a.date.localeCompare(b.date));
+
+  // Apply time window filter
+  const endDate = new Date(today);
+  if (dashWindow === 'week')  endDate.setDate(endDate.getDate() + 7);
+  if (dashWindow === 'month') endDate.setDate(endDate.getDate() + 31);
+  if (dashWindow !== 'all') {
+    dueSoon = dueSoon.filter(e => {
+      const [yr,mo,dy] = e.date.split('-').map(Number);
+      const d = new Date(yr, mo-1, dy);
+      return d >= today && d <= endDate;
+    });
+  } else {
+    dueSoon = dueSoon.filter(e => {
+      const [yr,mo,dy] = e.date.split('-').map(Number);
+      return new Date(yr, mo-1, dy) >= today;
+    });
+  }
 
   const ul = document.getElementById('upcomingDeadlines');
   ul.innerHTML = dueSoon.length === 0
-    ? `<div style="font-size:13px;color:var(--gray-mid);padding:1rem 0">No upcoming deliverables.</div>`
+    ? `<div style="font-size:13px;color:var(--gray-mid);padding:1rem 0">No deadlines ${dashWindow==='week'?'this week':dashWindow==='month'?'this month':'coming up'}.</div>`
     : dueSoon.map(e => {
         const cat = CAT[e.cat];
         const cc  = courseColor(e.course);
@@ -454,6 +480,11 @@ function renderDashboard() {
 
   // Fellowship shared space section
   renderSharedSpace();
+}
+
+function setDashWindow(w) {
+  dashWindow = w;
+  renderDashboard();
 }
 
 function renderSharedSpace() {

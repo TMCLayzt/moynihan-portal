@@ -1396,6 +1396,26 @@ body:not(.student-mode) .student-only { display: none !important; }
 .admin-toggle-wrap input:checked + .admin-toggle-slider { background: var(--maroon); }
 .admin-toggle-wrap input:checked + .admin-toggle-slider:before { transform: translateX(20px); }
 
+/* ── DASHBOARD WINDOW TOGGLE ─────────────────────────────────────────────── */
+.dash-window-btn {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border: 1px solid var(--gray-border);
+  background: white;
+  color: var(--gray-mid);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.dash-window-btn.active {
+  background: var(--gray-brand);
+  color: white;
+  border-color: var(--gray-brand);
+}
+.dash-window-btn:hover:not(.active) { background: var(--gray-light); }
+
 /* ── MANDATORY BADGE ─────────────────────────────────────────────────────── */
 .badge-mandatory {
   display: inline-block;
