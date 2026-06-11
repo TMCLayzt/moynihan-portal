@@ -68,7 +68,6 @@
               <div class="topbar-dropdown-name" id="dropdownName">Student</div>
               <div class="topbar-dropdown-role" id="dropdownRole">Student</div>
             </div>
-            <!-- Only shown for students -->
             <button class="topbar-dropdown-item student-only" onclick="openChangePassword()">
               &#128274; Change password
             </button>
@@ -89,6 +88,9 @@
       <a class="subnav-link active" onclick="showView('dashboard')">Dashboard</a>
       <a class="subnav-link" onclick="showView('calendar')">Calendar</a>
       <a class="subnav-link" onclick="showView('modules')">Syllabus</a>
+      <a class="subnav-link" onclick="showView('finance')">Finance</a>
+      <a class="subnav-link" onclick="showView('resources')">Resources</a>
+      <a class="subnav-link" onclick="showView('about')">About</a>
       <a class="subnav-link admin-only" onclick="showView('admin')" id="adminNavLink" style="margin-left:auto;color:rgba(255,255,255,0.5);border-left:1px solid #444;padding-left:20px">&#9881; Admin</a>
     </div>
   </nav>
@@ -126,7 +128,7 @@
     <div class="page-hero-inner">
       <div>
         <div class="page-hero-meta">PSC 31180 &mdash; Power, Politics, and Policy in NYC</div>
-        <h1>Welcome back, <strong>Layana.</strong><br>Fall 2025 is underway.</h1>
+        <h1>Welcome back, <strong>Fellow.</strong><br>Fall 2025 is underway.</h1>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px;">
         <button class="cta-arrow" onclick="showView('calendar')">
@@ -159,6 +161,12 @@
     <div class="section">
       <div class="section-label">Upcoming sessions &amp; events</div>
       <div class="event-strip" id="upcomingEvents"></div>
+    </div>
+    <!-- Fellowship shared space — visible to all fellows -->
+    <div class="section">
+      <div class="section-label">Fellowship &mdash; Fall 2025 shared events</div>
+      <div style="font-size:12px;color:var(--gray-mid);margin-bottom:1rem">Events open to both PSC 31180 and PSC 31330 fellows.</div>
+      <div id="fellowshipSharedSpace"></div>
     </div>
   </div>
 </div>
@@ -246,7 +254,208 @@
   </div>
 </div>
 
-<div id="view-resources" class="view"></div>
+
+<!-- ═══════════════════════════════════════
+     FINANCE VIEW
+════════════════════════════════════════ -->
+<div id="view-finance" class="view">
+  <div class="page-hero">
+    <div class="page-hero-inner">
+      <div>
+        <div class="page-hero-meta">Fellowship Finance &amp; Stipends</div>
+        <h1>Finance <strong>Checklist</strong></h1>
+      </div>
+    </div>
+  </div>
+  <div class="container">
+    <div class="section">
+      <p style="font-size:14px;color:var(--gray-mid);max-width:600px;margin-bottom:2rem">
+        Track your required financial documents and deadlines. Check off each item as you complete it.
+        Your instructor manages this list — reach out if you have questions.
+      </p>
+      <div id="financeProgress" style="max-width:500px;margin-bottom:2rem"></div>
+      <div id="financeChecklist"></div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════
+     RESOURCES VIEW
+════════════════════════════════════════ -->
+<div id="view-resources" class="view">
+  <div class="page-hero">
+    <div class="page-hero-inner">
+      <div>
+        <div class="page-hero-meta">Documents, links, and guides</div>
+        <h1>Fellowship <strong>Resources</strong></h1>
+      </div>
+    </div>
+  </div>
+  <div class="container">
+    <div class="section">
+      <div id="resourcesNav" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:2rem"></div>
+      <div id="resourcesList"></div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════
+     ABOUT VIEW
+════════════════════════════════════════ -->
+<div id="view-about" class="view">
+  <div class="page-hero">
+    <div class="page-hero-inner">
+      <div>
+        <div class="page-hero-meta">The Moynihan Center Fellowship</div>
+        <h1>About the <strong>Program</strong></h1>
+      </div>
+    </div>
+  </div>
+  <div class="container">
+    <div class="section">
+      <div class="grid-2" style="gap:3rem">
+        <div>
+          <div class="section-label">About the fellowship</div>
+          <div class="about-block">
+            <p>The Moynihan Center Fellowship at The City College of New York is a year-long academic and civic engagement program connecting undergraduate students to New York City&rsquo;s political landscape.</p>
+            <p>Fellows participate in two parallel tracks: <strong>PSC 31180 &mdash; Power, Politics, and Policy in NYC</strong> (led by Layana Abu Touq) and <strong>PSC 31330 &mdash; Truth and Politics / TAP</strong> (led by Dr. Michael Miller).</p>
+            <p>Through lectures, guest speakers, field experiences, and research projects, fellows develop practical skills in policy analysis, civic participation, and professional development.</p>
+          </div>
+
+          <div class="section-label" style="margin-top:2.5rem">Contacts</div>
+          <div class="about-contact-list">
+            <div class="about-contact-row">
+              <div class="about-contact-name">Layana Abu Touq</div>
+              <div class="about-contact-role">Instructor, PSC 31180</div>
+              <div class="about-contact-email">Labutouq@ccny.cuny.edu</div>
+            </div>
+            <div class="about-contact-row">
+              <div class="about-contact-name">Dr. Michael Miller</div>
+              <div class="about-contact-role">Instructor, PSC 31330 (TAP)</div>
+              <div class="about-contact-email">mmiller3@ccny.cuny.edu</div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-label">How to use this portal</div>
+          <div class="manual-section">
+            <div class="manual-item">
+              <div class="manual-step">1</div>
+              <div>
+                <div class="manual-title">Dashboard</div>
+                <div class="manual-desc">Your home base. See the latest announcements from your instructors, upcoming deadlines, and the next class sessions at a glance.</div>
+              </div>
+            </div>
+            <div class="manual-item">
+              <div class="manual-step">2</div>
+              <div>
+                <div class="manual-title">Calendar</div>
+                <div class="manual-desc">Browse all events by month. Click any date to see details. Use the course filter to view PSC 31180, TAP 31330, or all events. Click <strong>Add to calendar</strong> on any event to download a .ics file for Google Calendar, Apple Calendar, or Outlook.</div>
+              </div>
+            </div>
+            <div class="manual-item">
+              <div class="manual-step">3</div>
+              <div>
+                <div class="manual-title">Syllabus</div>
+                <div class="manual-desc">View the full course syllabus organized by module. Each module has tabs for Overview, Sessions, Deliverables, Readings, and linked Events. Switch between PSC 31180 and TAP 31330 using the course buttons.</div>
+              </div>
+            </div>
+            <div class="manual-item">
+              <div class="manual-step">4</div>
+              <div>
+                <div class="manual-title">RSVPs</div>
+                <div class="manual-desc">Guest speaker events and joint fellowship events require an RSVP. You&rsquo;ll see an <strong>RSVP</strong> button on those events in the calendar and syllabus. Some events also have an Eventbrite registration link.</div>
+              </div>
+            </div>
+            <div class="manual-item">
+              <div class="manual-step">5</div>
+              <div>
+                <div class="manual-title">Finance checklist</div>
+                <div class="manual-desc">Track your fellowship financial documents (W-2s, FAFSA, stipend paperwork). Check off items as you complete them. Your instructor adds and manages this list.</div>
+              </div>
+            </div>
+            <div class="manual-item">
+              <div class="manual-step">6</div>
+              <div>
+                <div class="manual-title">Resources</div>
+                <div class="manual-desc">Find links to important documents, forms, academic guides, housing resources, and more. Organized by category.</div>
+              </div>
+            </div>
+            <div class="manual-item">
+              <div class="manual-step">7</div>
+              <div>
+                <div class="manual-title">Change your password</div>
+                <div class="manual-desc">Click your initials in the top-right corner and select <strong>Change password</strong>. Your default password was set by your instructor — change it when you first log in.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Admin manual section -->
+      <div class="admin-only" style="margin-top:4rem">
+        <div class="section-label">Admin guide</div>
+        <div class="grid-2" style="gap:3rem;margin-top:1.5rem">
+          <div>
+            <div class="manual-section">
+              <div class="manual-item">
+                <div class="manual-step" style="background:#f5e8e8;color:var(--maroon)">A</div>
+                <div>
+                  <div class="manual-title">Adding students</div>
+                  <div class="manual-desc">Go to <strong>Admin → Students</strong>. Upload a CSV (columns: name, email, course) or add manually. All new students get the default password <code>moynihan2025</code>. They can change it after logging in.</div>
+                </div>
+              </div>
+              <div class="manual-item">
+                <div class="manual-step" style="background:#f5e8e8;color:var(--maroon)">B</div>
+                <div>
+                  <div class="manual-title">Alumni / inactive students</div>
+                  <div class="manual-desc">When a fellow graduates or leaves, click <strong>Deactivate</strong> on their row in Admin → Students. They are marked as Alumni and cannot log in, but their data is preserved. Use <strong>Reactivate</strong> to restore access.</div>
+                </div>
+              </div>
+              <div class="manual-item">
+                <div class="manual-step" style="background:#f5e8e8;color:var(--maroon)">C</div>
+                <div>
+                  <div class="manual-title">Events &amp; calendar</div>
+                  <div class="manual-desc">Add events in <strong>Admin → Events</strong>. Fill in title, date, category, course, and optionally an Eventbrite URL, description, and check <strong>Required</strong> to mark mandatory attendance. You can also add events directly from the calendar by clicking any date.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="manual-section">
+              <div class="manual-item">
+                <div class="manual-step" style="background:#f5e8e8;color:var(--maroon)">D</div>
+                <div>
+                  <div class="manual-title">Finance checklist</div>
+                  <div class="manual-desc">In <strong>Admin → Finance</strong>, add items like &ldquo;Submit W-2&rdquo; or &ldquo;Complete FAFSA.&rdquo; Students see these as a checklist on their Finance tab and can check off each item as they complete it.</div>
+                </div>
+              </div>
+              <div class="manual-item">
+                <div class="manual-step" style="background:#f5e8e8;color:var(--maroon)">E</div>
+                <div>
+                  <div class="manual-title">Resources</div>
+                  <div class="manual-desc">In <strong>Admin → Resources</strong>, add links to documents, forms, or guides. Choose a category (General, Finance, Academic, Forms, Housing) and add a URL and description.</div>
+                </div>
+              </div>
+              <div class="manual-item">
+                <div class="manual-step" style="background:#f5e8e8;color:var(--maroon)">F</div>
+                <div>
+                  <div class="manual-title">Announcements with week tags</div>
+                  <div class="manual-desc">When posting an announcement, you can add a <strong>week number</strong>. Students will see announcements filtered to the current week when you set a filter, or all announcements if no filter is active.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
 
 <!-- ═══════════════════════════════════════
      ADMIN VIEW
@@ -267,6 +476,8 @@
     <button class="admin-tab" onclick="switchAdminTab('events')">Events</button>
     <button class="admin-tab" onclick="switchAdminTab('rsvps')">RSVPs</button>
     <button class="admin-tab" onclick="switchAdminTab('syllabus')">Syllabus</button>
+    <button class="admin-tab" onclick="switchAdminTab('finance')">Finance</button>
+    <button class="admin-tab" onclick="switchAdminTab('resources')">Resources</button>
     <button class="admin-tab" onclick="switchAdminTab('students')">Students</button>
     <button class="admin-tab" onclick="switchAdminTab('users')">Admin users</button>
     <button class="admin-tab" onclick="switchAdminTab('settings')">Settings</button>
@@ -279,7 +490,7 @@
       <div class="admin-section-header">
         <div>
           <div class="admin-section-title">Announcements</div>
-          <div class="admin-section-sub">Visible to students on the dashboard.</div>
+          <div class="admin-section-sub">Visible to students on the dashboard. Tag by week to help students filter.</div>
         </div>
       </div>
       <div class="admin-form-card">
@@ -296,6 +507,10 @@
           </div>
         </div>
         <div class="form-group"><label class="form-label">Body</label><textarea class="form-input" id="ann-body" rows="3" placeholder="Write your announcement…"></textarea></div>
+        <div class="form-group" style="max-width:200px">
+          <label class="form-label">Week number <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional, e.g. 3)</span></label>
+          <input class="form-input" id="ann-week" type="text" placeholder="e.g. 3">
+        </div>
         <button class="admin-btn-primary" onclick="addAnnouncement()">Post announcement</button>
       </div>
       <div class="admin-section-title" style="margin-top:2rem;margin-bottom:1rem">Live announcements</div>
@@ -327,7 +542,7 @@
           </div>
         </div>
         <div class="admin-row-2">
-          <div class="form-group"><label class="form-label">Location / note</label><input class="form-input" id="ev-note" type="text" placeholder="e.g. NAC 4/133 · 3:30–5:00 PM"></div>
+          <div class="form-group"><label class="form-label">Location / short note</label><input class="form-input" id="ev-note" type="text" placeholder="e.g. NAC 4/133 · 3:30–5:00 PM"></div>
           <div class="form-group"><label class="form-label">Course</label>
             <select class="form-input" id="ev-course">
               <option value="psc31180">PSC 31180 — Power, Politics &amp; Policy</option>
@@ -335,6 +550,18 @@
               <option value="joint">Joint / both cohorts</option>
             </select>
           </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional — shown in event detail panel)</span></label>
+          <textarea class="form-input" id="ev-description" rows="2" placeholder="Speaker bio, event details, instructions…"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Eventbrite URL <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
+          <input class="form-input" id="ev-eventbrite" type="url" placeholder="https://www.eventbrite.com/e/...">
+        </div>
+        <div class="form-group" style="display:flex;align-items:center;gap:10px">
+          <input type="checkbox" id="ev-mandatory" style="width:16px;height:16px;accent-color:var(--maroon)">
+          <label for="ev-mandatory" class="form-label" style="margin:0;cursor:pointer">Mark as required / mandatory attendance</label>
         </div>
         <button class="admin-btn-primary" onclick="adminAddEvent()">Add to calendar</button>
       </div>
@@ -366,10 +593,78 @@
       <div class="admin-section-header">
         <div>
           <div class="admin-section-title">Syllabus editor</div>
-          <div class="admin-section-sub">Edit module descriptions, progress, status, and dates.</div>
+          <div class="admin-section-sub">Edit module descriptions, progress, status, and dates. Last updated timestamp is saved automatically.</div>
         </div>
       </div>
       <div id="adminSyllabusList"></div>
+    </div>
+
+    <!-- ── FINANCE ── -->
+    <div class="admin-panel" id="apanel-finance">
+      <div class="admin-section-header">
+        <div>
+          <div class="admin-section-title">Finance checklist</div>
+          <div class="admin-section-sub">Add items students need to complete — W-2s, FAFSA deadlines, stipend forms, etc. Students check off each item.</div>
+        </div>
+      </div>
+      <div class="admin-form-card">
+        <div class="admin-form-title">Add checklist item</div>
+        <div class="admin-row-2">
+          <div class="form-group"><label class="form-label">Title</label><input class="form-input" id="fin-title" type="text" placeholder="e.g. Submit W-2 form"></div>
+          <div class="form-group"><label class="form-label">Category</label>
+            <select class="form-input" id="fin-cat">
+              <option value="document">Documents</option>
+              <option value="deadline">Deadlines</option>
+              <option value="stipend">Stipend</option>
+              <option value="fafsa">FAFSA</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="admin-row-2">
+          <div class="form-group"><label class="form-label">Description <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label><input class="form-input" id="fin-desc" type="text" placeholder="Short explanation or instructions"></div>
+          <div class="form-group"><label class="form-label">Due date / label <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label><input class="form-input" id="fin-due" type="text" placeholder="e.g. Oct 15 or Before stipend disbursement"></div>
+        </div>
+        <div class="form-group" style="display:flex;align-items:center;gap:10px">
+          <input type="checkbox" id="fin-required" checked style="width:16px;height:16px;accent-color:var(--maroon)">
+          <label for="fin-required" class="form-label" style="margin:0;cursor:pointer">Mark as required</label>
+        </div>
+        <button class="admin-btn-primary" onclick="addFinanceItem()">Add item</button>
+      </div>
+      <div class="admin-section-title" style="margin-top:2rem;margin-bottom:1rem">Finance items</div>
+      <div id="adminFinanceList"></div>
+    </div>
+
+    <!-- ── RESOURCES ── -->
+    <div class="admin-panel" id="apanel-resources">
+      <div class="admin-section-header">
+        <div>
+          <div class="admin-section-title">Resources</div>
+          <div class="admin-section-sub">Add links to documents, guides, and external resources that students can access from the Resources tab.</div>
+        </div>
+      </div>
+      <div class="admin-form-card">
+        <div class="admin-form-title">Add resource</div>
+        <div class="admin-row-2">
+          <div class="form-group"><label class="form-label">Title</label><input class="form-input" id="res-title" type="text" placeholder="e.g. W-2 Instructions PDF"></div>
+          <div class="form-group"><label class="form-label">Category</label>
+            <select class="form-input" id="res-cat">
+              <option value="general">General</option>
+              <option value="finance">Finance &amp; Stipends</option>
+              <option value="academic">Academic</option>
+              <option value="forms">Forms &amp; Documents</option>
+              <option value="housing">Housing</option>
+            </select>
+          </div>
+        </div>
+        <div class="admin-row-2">
+          <div class="form-group"><label class="form-label">URL <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label><input class="form-input" id="res-url" type="url" placeholder="https://..."></div>
+          <div class="form-group"><label class="form-label">Description <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label><input class="form-input" id="res-desc" type="text" placeholder="Short description"></div>
+        </div>
+        <button class="admin-btn-primary" onclick="addResource()">Add resource</button>
+      </div>
+      <div class="admin-section-title" style="margin-top:2rem;margin-bottom:1rem">All resources</div>
+      <div id="adminResourceList"></div>
     </div>
 
     <!-- ── STUDENTS ── -->
@@ -377,7 +672,7 @@
       <div class="admin-section-header">
         <div>
           <div class="admin-section-title">Student roster</div>
-          <div class="admin-section-sub">Manage enrolled students. Default password for all new accounts: <strong>moynihan2025</strong></div>
+          <div class="admin-section-sub">Manage enrolled students. Deactivate to mark as alumni (preserves data). Default password for new accounts: <strong>moynihan2025</strong></div>
         </div>
       </div>
 
@@ -410,7 +705,10 @@
         <button class="admin-btn-primary" onclick="addStudent()">Add student</button>
       </div>
 
-      <div class="admin-section-title" style="margin-top:2rem;margin-bottom:1rem">Enrolled students <span id="studentCount" style="font-weight:400;color:var(--gray-mid)"></span></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:2rem;margin-bottom:1rem;flex-wrap:wrap;gap:10px">
+        <div class="admin-section-title" style="margin:0">Enrolled students <span id="studentCount" style="font-weight:400;color:var(--gray-mid)"></span></div>
+        <button class="admin-btn-secondary" id="toggleInactiveBtn" onclick="toggleInactiveStudents()" style="display:none;font-size:12px">Show alumni</button>
+      </div>
       <div id="adminStudentList"></div>
     </div>
 
@@ -458,7 +756,7 @@
       <div class="admin-section-header">
         <div>
           <div class="admin-section-title">Course settings</div>
-          <div class="admin-section-sub">Configure course info, instructor details, and portal behaviour.</div>
+          <div class="admin-section-sub">Configure course info and instructor details.</div>
         </div>
       </div>
       <div class="admin-form-card">

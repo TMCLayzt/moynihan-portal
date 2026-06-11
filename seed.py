@@ -322,11 +322,43 @@ def run():
                 (mod_id, r_title, when, r_type, r_desc, r_i)
             )
 
+    # ── FINANCE ITEMS ────────────────────────────────────────────────────
+    finance_items = [
+        ('Complete Direct Deposit Form', 'Submit your bank info to receive stipend payments.', 'Before first disbursement', 'stipend', 1),
+        ('Submit W-2 / W-9 Tax Form',   'Required for all paid fellows. Obtain from HR or Bursar.', 'First week of term', 'document', 1),
+        ('Verify FAFSA Completion',      'Make sure your FAFSA is filed and processed for this academic year.', 'Sep 30', 'fafsa', 1),
+        ('Sign Fellowship Agreement',    'Review and sign the fellowship terms and conditions.', 'First class session', 'document', 1),
+        ('Complete Enrollment Verification', 'Confirm full-time enrollment status with the Registrar.', 'Week 2', 'document', 0),
+    ]
+    for i, (title, desc, due, cat, req) in enumerate(finance_items):
+        db.execute(
+            'INSERT INTO finance_items (title,description,due_label,category,is_required,order_index) VALUES (?,?,?,?,?,?)',
+            (title, desc, due, cat, req, i)
+        )
+
+    # ── RESOURCES ────────────────────────────────────────────────────────
+    resources_seed = [
+        ('CCNY Bursar — Payments & Financial Aid', 'https://www.ccny.cuny.edu/bursar', 'Tuition, fees, and financial aid information.', 'finance', 0),
+        ('FAFSA Application Portal', 'https://studentaid.gov/h/apply-for-aid/fafsa', 'File or update your Free Application for Federal Student Aid.', 'fafsa', 1),
+        ('CCNY Registrar — Enrollment Verification', 'https://www.ccny.cuny.edu/registrar/enrollment-verification', 'Download proof of enrollment or request official letters.', 'forms', 0),
+        ('CUNYfirst Student Portal', 'https://home.cunyfirst.cuny.edu', 'Official student records, registration, and billing.', 'general', 0),
+        ('Brightspace (CCNY LMS)', 'https://brightspace.cuny.edu', 'Course materials, grades, and assignments.', 'academic', 0),
+        ('CCNY Writing Center', 'https://www.ccny.cuny.edu/writingcenter', 'Free tutoring and writing support for all students.', 'academic', 1),
+        ('CCNY Career Development', 'https://www.ccny.cuny.edu/careerdevelopment', 'Internship listings, career coaching, and resume review.', 'academic', 2),
+        ('NYC 311 — City Services', 'https://portal.311.nyc.gov', 'Report issues and access New York City government services.', 'general', 1),
+    ]
+    for r_i, (title, url, desc, cat, order_i) in enumerate(resources_seed):
+        db.execute(
+            'INSERT INTO resources (title,url,description,category,order_index) VALUES (?,?,?,?,?)',
+            (title, url, desc, cat, order_i)
+        )
+
     db.commit()
     db.close()
     print('Done. Database seeded.')
 
 if __name__ == '__main__':
-    from app import init_db
+    from app import init_db, migrate_db
     init_db()
+    migrate_db()
     run()

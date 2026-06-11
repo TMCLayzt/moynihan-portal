@@ -1396,6 +1396,207 @@ body:not(.student-mode) .student-only { display: none !important; }
 .admin-toggle-wrap input:checked + .admin-toggle-slider { background: var(--maroon); }
 .admin-toggle-wrap input:checked + .admin-toggle-slider:before { transform: translateX(20px); }
 
+/* ── MANDATORY BADGE ─────────────────────────────────────────────────────── */
+.badge-mandatory {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: #fff0f0;
+  color: #A32D2D;
+  border: 1px solid #e8c0c0;
+  padding: 2px 6px;
+  vertical-align: middle;
+}
+.event-card-strip-required {
+  position: absolute;
+  top: 8px; right: 8px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: #A32D2D;
+  color: white;
+  padding: 2px 6px;
+  z-index: 1;
+}
+
+/* ── ANNOUNCEMENT WEEK BADGE ─────────────────────────────────────────────── */
+.ann-week-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(0,0,0,0.08);
+  color: inherit;
+  padding: 2px 7px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+/* ── PANEL EVENT DESCRIPTION ─────────────────────────────────────────────── */
+.panel-event-desc {
+  font-size: 13px;
+  color: var(--gray-mid);
+  line-height: 1.6;
+  margin-top: 6px;
+  white-space: pre-line;
+}
+
+/* ── FELLOWSHIP SHARED SPACE ─────────────────────────────────────────────── */
+.shared-event-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--gray-border);
+}
+.shared-event-row:last-child { border-bottom: none; }
+.shared-event-date {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 40px;
+  font-weight: 700;
+}
+.shared-event-date span:first-child { font-size: 1.4rem; line-height: 1; color: var(--gray-brand); }
+.shared-event-date span:last-child  { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gray-mid); }
+.shared-event-body { flex: 1; }
+.shared-event-title { font-size: 14px; font-weight: 600; color: var(--gray-brand); }
+.shared-event-cat   { font-size: 11px; color: var(--gray-mid); margin-top: 2px; }
+
+/* ── FINANCE CHECKLIST ───────────────────────────────────────────────────── */
+.finance-cat-group { margin-bottom: 2rem; }
+.finance-cat-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gray-mid);
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--gray-border);
+}
+.finance-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 16px;
+  background: white;
+  border: 1px solid var(--gray-border);
+  margin-bottom: 8px;
+  transition: background 0.15s, opacity 0.15s;
+}
+.finance-item.checked { background: #f7fdf7; opacity: 0.75; }
+.finance-checkbox {
+  width: 24px; height: 24px;
+  flex-shrink: 0;
+  border: 2px solid var(--gray-border);
+  background: white;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--maroon);
+  transition: border-color 0.15s, background 0.15s;
+}
+.finance-checkbox.checked {
+  border-color: #1D9E75;
+  background: #E1F5EE;
+  color: #1D9E75;
+}
+.finance-checkbox:hover { border-color: var(--maroon); }
+.finance-item-body { flex: 1; }
+.finance-item-title { font-size: 14px; font-weight: 600; color: var(--gray-brand); }
+.finance-item-desc  { font-size: 12px; color: var(--gray-mid); margin-top: 3px; }
+.finance-item-due   { font-size: 11px; font-weight: 600; color: #D85A30; margin-top: 4px; }
+
+/* ── RESOURCES ───────────────────────────────────────────────────────────── */
+.resource-nav-link {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  padding: 5px 12px;
+  border: 1px solid currentColor;
+  transition: opacity 0.15s;
+}
+.resource-nav-link:hover { opacity: 0.7; }
+.resource-cat-section { margin-bottom: 3rem; }
+.resource-cat-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 1rem;
+  padding-bottom: 8px;
+  border-bottom: 2px solid currentColor;
+}
+.resource-items-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+.resource-card {
+  display: block;
+  padding: 18px;
+  background: white;
+  border: 1px solid var(--gray-border);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.resource-card:hover { border-color: var(--maroon); box-shadow: 0 2px 12px rgba(0,0,0,0.07); }
+.resource-card-title { font-size: 14px; font-weight: 600; color: var(--gray-brand); }
+.resource-card-desc  { font-size: 12px; color: var(--gray-mid); margin-top: 5px; line-height: 1.5; }
+.resource-card-link  { font-size: 11px; font-weight: 600; color: var(--maroon); margin-top: 10px; }
+
+/* ── ABOUT / MANUAL PAGES ────────────────────────────────────────────────── */
+.about-block p {
+  font-size: 14px;
+  color: var(--gray-mid);
+  line-height: 1.75;
+  margin-bottom: 1rem;
+}
+.about-contact-list { display: flex; flex-direction: column; gap: 12px; }
+.about-contact-row {
+  padding: 14px 16px;
+  background: var(--gray-light);
+  border-left: 3px solid var(--maroon);
+}
+.about-contact-name  { font-size: 14px; font-weight: 700; color: var(--gray-brand); }
+.about-contact-role  { font-size: 12px; color: var(--gray-mid); margin-top: 2px; }
+.about-contact-email { font-size: 12px; color: var(--maroon); margin-top: 2px; font-family: monospace; }
+
+.manual-section { display: flex; flex-direction: column; gap: 0; }
+.manual-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--gray-border);
+}
+.manual-item:last-child { border-bottom: none; }
+.manual-step {
+  width: 28px; height: 28px;
+  flex-shrink: 0;
+  background: var(--gray-brand);
+  color: white;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+.manual-title { font-size: 14px; font-weight: 700; color: var(--gray-brand); }
+.manual-desc  { font-size: 13px; color: var(--gray-mid); margin-top: 4px; line-height: 1.6; }
+.manual-desc code {
+  background: var(--gray-light);
+  padding: 1px 5px;
+  font-family: monospace;
+  font-size: 12px;
+}
+
 @media (max-width: 900px) {
   .grid-3 { grid-template-columns: 1fr; }
   .grid-2 { grid-template-columns: 1fr; }
@@ -1403,4 +1604,5 @@ body:not(.student-mode) .student-only { display: none !important; }
   .page-hero h1 { font-size: 1.8rem; }
   .side-panel { width: 100%; right: -100%; }
   .event-strip { grid-template-columns: repeat(2, 1fr); }
+  .resource-items-grid { grid-template-columns: 1fr 1fr; }
 }

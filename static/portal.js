@@ -33,17 +33,28 @@ const COURSE_LABELS = {
   psc31330: 'PSC 31330 only',
 };
 
+const RESOURCE_CATS = {
+  general:  { label:'General',         color:'#6b6b6b' },
+  finance:  { label:'Finance & Stipends', color:'#1D9E75' },
+  academic: { label:'Academic',         color:'#185FA5' },
+  forms:    { label:'Forms & Documents', color:'#D85A30' },
+  housing:  { label:'Housing',          color:'#BA7517' },
+};
+
 // ── MUTABLE DATA (loaded from API after login) ────────────────────────────────
 
-let ALL_EVENTS    = [];
-let MODULES       = [];
-let TAP_MODULES   = [];
-let announcements = [];
-let students      = [];
-let adminUsers    = [];
-let allRsvps      = {};     // admin: event_id -> [{user_id, name}]
+let ALL_EVENTS      = [];
+let MODULES         = [];
+let TAP_MODULES     = [];
+let announcements   = [];
+let students        = [];
+let adminUsers      = [];
+let allRsvps        = {};
+let financeItems    = [];
+let resources       = [];
 
-const rsvpSet = new Set();  // current user's RSVPd event IDs
+const rsvpSet       = new Set();
+const financeChecked = new Set();
 
 const COURSES = {
   psc31180: {
@@ -68,27 +79,35 @@ const COURSES = {
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
 
-let isStudentMode = false;
-let currentRole   = null;
-let activeCourse  = 'psc31180';
-let calFilterCourse = 'psc31180';
-let calYear = 2025, calMonth = 8;
+let isStudentMode    = false;
+let currentRole      = null;
+let currentUserName  = '';
+let currentFirstName = '';
+let activeCourse     = 'psc31180';
+let calFilterCourse  = 'psc31180';
+
+// Default calendar to current month
+const _now = new Date();
+let calYear  = _now.getFullYear();
+let calMonth = _now.getMonth();
+
 let panelMode = null, selectedDate = null;
-let openModuleId = null;
-let activeTab = {};
-let eventsFilter = 'all';
-let adminSylOpen = null;
-let showPassFor  = new Set();
+let openModuleId  = null;
+let activeTab     = {};
+let eventsFilter  = 'all';
+let adminSylOpen  = null;
+let showPassFor   = new Set();
+let annWeekFilter = '';
 
 
 // ── DATA TRANSFORMS ───────────────────────────────────────────────────────────
-// Map DB field names to what the render functions expect
 
 function transformEvent(e) {
   return {
     ...e,
-    hidden: !!e.is_hidden,
-    locked: !!e.is_locked,
+    hidden:    !!e.is_hidden,
+    locked:    !!e.is_locked,
+    mandatory: !!e.is_mandatory,
   };
 }
 
@@ -98,7 +117,7 @@ function transformModule(m) {
     desc: m.description,
     sessions: (m.sessions || []).map(s => ({
       ...s,
-      date: s.date_label,
+      date:    s.date_label,
       isJoint: !!s.is_joint,
     })),
     deliverables: (m.deliverables || []).map(d => ({
@@ -143,25 +162,36 @@ async function api(method, path, body) {
 // ── POST-LOGIN DATA LOADER ────────────────────────────────────────────────────
 
 async function loadPortalData() {
-  const [evRes, modRes, annRes, rsvpRes] = await Promise.all([
+  const [evRes, modRes, annRes, rsvpRes, finRes, resRes] = await Promise.all([
     fetch('/api/events'),
     fetch('/api/modules'),
     fetch('/api/announcements'),
     fetch('/api/rsvps'),
+    fetch('/api/finance'),
+    fetch('/api/resources'),
   ]);
 
   const evData   = await evRes.json();
   const modData  = await modRes.json();
   const annData  = await annRes.json();
   const rsvpData = await rsvpRes.json();
+  const finData  = await finRes.json();
+  const resData  = await resRes.json();
 
-  ALL_EVENTS  = evData.map(transformEvent);
+  ALL_EVENTS    = evData.map(transformEvent);
   const allMods = modData.map(transformModule);
-  MODULES     = allMods.filter(m => m.course === 'psc31180');
-  TAP_MODULES = allMods.filter(m => m.course === 'psc31330');
+  MODULES       = allMods.filter(m => m.course === 'psc31180');
+  TAP_MODULES   = allMods.filter(m => m.course === 'psc31330');
   announcements = annData;
+
   rsvpSet.clear();
   rsvpData.forEach(id => rsvpSet.add(id));
+
+  financeItems = finData;
+  financeChecked.clear();
+  finData.forEach(item => { if (item.checked) financeChecked.add(item.id); });
+
+  resources = resData;
 
   updateCourseEvents();
   updateCourseModules();
@@ -175,13 +205,13 @@ async function loadPortalData() {
     const usersData = await usersRes.json();
     students   = stuData.map(transformStudent);
     adminUsers = usersData.map(u => ({
-      id: u.id,
-      name: u.display_name,
+      id:      u.id,
+      name:    u.display_name,
       username: u.username,
-      role: u.role,
-      course: u.course,
-      active: !!u.is_active,
-      you: !!u.you,
+      role:    u.role,
+      course:  u.course,
+      active:  !!u.is_active,
+      you:     !!u.you,
     }));
   }
 }
@@ -206,21 +236,23 @@ async function attemptLogin() {
     return;
   }
 
-  currentRole = data.role;
-  isStudentMode = (currentRole === 'student');
+  currentRole      = data.role;
+  currentUserName  = data.display;
+  currentFirstName = data.first_name || data.display.split(' ')[0];
+  isStudentMode    = (currentRole === 'student');
 
-  document.getElementById('userName').textContent    = data.display;
-  document.getElementById('userAvatar').textContent  = data.initials;
+  document.getElementById('userName').textContent     = data.display;
+  document.getElementById('userAvatar').textContent   = data.initials;
   document.getElementById('dropdownName').textContent = data.display;
   document.getElementById('dropdownRole').textContent = isStudentMode ? 'Student' : 'Administrator';
 
   document.body.classList.toggle('student-mode', isStudentMode);
   document.getElementById('panelAddBtn').style.display = isStudentMode ? 'none' : '';
 
-  // Default to student's course if set
+  // Default to student's course
   if (data.course && data.course !== 'both') {
-    activeCourse = data.course;
-    calFilterCourse = data.course;
+    activeCourse     = data.course;
+    calFilterCourse  = data.course;
   }
 
   await loadPortalData();
@@ -234,11 +266,12 @@ async function attemptLogin() {
 
 async function logout() {
   await api('POST', '/api/logout');
-  currentRole = null;
-  isStudentMode = false;
+  currentRole = null; isStudentMode = false;
   ALL_EVENTS = []; MODULES = []; TAP_MODULES = [];
   announcements = []; students = []; adminUsers = [];
   allRsvps = {}; rsvpSet.clear();
+  financeItems = []; financeChecked.clear();
+  resources = [];
   updateCourseEvents(); updateCourseModules();
   document.getElementById('loginUser').value = '';
   document.getElementById('loginPass').value = '';
@@ -258,15 +291,19 @@ function showView(name) {
   document.querySelectorAll('.subnav-link').forEach(l => l.classList.remove('active'));
   document.getElementById('view-'+name).classList.add('active');
   document.querySelectorAll('.subnav-link').forEach(l => {
-    if (l.getAttribute('onclick') && l.getAttribute('onclick').includes("'"+name+"'")) l.classList.add('active');
+    if (l.getAttribute('onclick') && l.getAttribute('onclick').includes("'"+name+"'"))
+      l.classList.add('active');
   });
   if (name === 'calendar')  renderCalendar();
   if (name === 'modules')   renderModulesList();
   if (name === 'dashboard') renderDashboard();
+  if (name === 'finance')   renderFinance();
+  if (name === 'resources') renderResources();
+  if (name === 'about')     renderAbout();
   if (name === 'admin') {
     renderAdminAnnouncements();
     renderAdminEvents('all');
-    const c = COURSES[activeCourse] || COURSES.psc31180;
+    const c  = COURSES[activeCourse] || COURSES.psc31180;
     const el = document.getElementById('adminCourseIndicator');
     if (el) el.innerHTML = `<span style="font-size:12px;color:rgba(255,255,255,0.6);font-weight:500">${c.code} &mdash; ${c.instructor}</span>`;
   }
@@ -277,7 +314,7 @@ function showView(name) {
 // ── COURSE SWITCHER ───────────────────────────────────────────────────────────
 
 function switchCourse(id) {
-  activeCourse = id;
+  activeCourse    = id;
   calFilterCourse = id;
   document.querySelectorAll('.syl-course-btn').forEach(b => b.classList.remove('active'));
   const inlineBtn = document.getElementById('syl-tab-' + id);
@@ -313,10 +350,14 @@ function renderDashboard() {
     else        metaEl.textContent = 'All courses — Fall 2025';
   }
   const h1El = document.querySelector('#view-dashboard h1');
-  if (h1El && course) {
-    h1El.innerHTML = `Welcome, <strong>${course.instructor.split(' ').pop()}.</strong><br>${course.title}`;
-  } else if (h1El) {
-    h1El.innerHTML = `All <strong>courses</strong><br>Fall 2025 overview`;
+  if (h1El) {
+    if (isStudentMode) {
+      h1El.innerHTML = `Welcome, <strong>${currentFirstName}.</strong><br>${course ? course.title : 'Fall 2025'}`;
+    } else if (course) {
+      h1El.innerHTML = `Welcome, <strong>${currentFirstName}.</strong><br>${course.title}`;
+    } else {
+      h1El.innerHTML = `All <strong>courses</strong><br>Fall 2025 overview`;
+    }
   }
 
   const today = new Date();
@@ -332,14 +373,15 @@ function renderDashboard() {
     ? `<div style="font-size:13px;color:var(--gray-mid);padding:1rem 0">No upcoming deliverables.</div>`
     : dueSoon.map(e => {
         const cat = CAT[e.cat];
-        const cc = courseColor(e.course);
-        const cl = courseLabel(e.course);
+        const cc  = courseColor(e.course);
+        const cl  = courseLabel(e.course);
         const [yr,mo,dy] = e.date.split('-').map(Number);
-        const eDate = new Date(yr, mo-1, dy);
+        const eDate   = new Date(yr, mo-1, dy);
         const diffDays = Math.round((eDate - today) / 86400000);
-        const mon = MONTHS_FULL[mo-1].slice(0,3).toUpperCase();
-        let daysLabel = diffDays < 0 ? `${Math.abs(diffDays)}d ago` : diffDays === 0 ? 'Today' : `${diffDays}d away`;
-        let daysClass = diffDays <= 0 ? 'urgent' : diffDays <= 3 ? 'urgent' : diffDays <= 10 ? 'soon' : '';
+        const mon      = MONTHS_FULL[mo-1].slice(0,3).toUpperCase();
+        let daysLabel  = diffDays < 0 ? `${Math.abs(diffDays)}d ago` : diffDays === 0 ? 'Today' : `${diffDays}d away`;
+        let daysClass  = diffDays <= 0 ? 'urgent' : diffDays <= 3 ? 'urgent' : diffDays <= 10 ? 'soon' : '';
+        const mandatoryBadge = e.mandatory ? `<span class="badge-mandatory">Required</span>` : '';
         return `<div class="deadline-timeline-item">
           <div class="dtl-date">
             <div class="dtl-date-num">${dy}</div>
@@ -351,7 +393,7 @@ function renderDashboard() {
           </div>
           <div class="dtl-card">
             <div class="dtl-eyebrow" style="color:${cat.color}">
-              ${cat.label}${cl ? `<span class="dtl-course-chip" style="background:${cc}18;color:${cc}">${cl}</span>` : ''}
+              ${cat.label}${cl ? `<span class="dtl-course-chip" style="background:${cc}18;color:${cc}">${cl}</span>` : ''}${mandatoryBadge}
             </div>
             <div class="dtl-title">${e.title}</div>
             ${e.note ? `<div class="dtl-note">${e.note.slice(0,80)}${e.note.length>80?'…':''}</div>` : ''}
@@ -361,7 +403,7 @@ function renderDashboard() {
       }).join('');
 
   const SESSION_CATS = new Set(['lecture','guest']);
-  const upcomingEvs = courseEvents
+  const upcomingEvs  = courseEvents
     .filter(e => SESSION_CATS.has(e.cat))
     .sort((a,b) => a.date.localeCompare(b.date))
     .slice(0, 8);
@@ -384,16 +426,17 @@ function renderDashboard() {
   strip.innerHTML = upcomingEvs.length === 0
     ? `<div style="padding:1.5rem;font-size:13px;color:var(--gray-mid)">No upcoming sessions.</div>`
     : upcomingEvs.map(e => {
-        const cat = CAT[e.cat];
-        const cc = courseColor(e.course);
+        const cat     = CAT[e.cat];
+        const cc      = courseColor(e.course);
         const isJoint = e.course === 'joint';
         const [yr,mo,dy] = e.date.split('-').map(Number);
-        const mon = MONTHS_FULL[mo-1].slice(0,3).toUpperCase();
-        const loc = extractLoc(e.note);
+        const mon     = MONTHS_FULL[mo-1].slice(0,3).toUpperCase();
+        const loc     = extractLoc(e.note);
         const typeLabel = e.cat === 'guest' ? 'Guest speaker' : isJoint ? 'Joint event' : 'Class session';
         return `<div class="event-card-strip" onclick="showView('calendar')">
           <div class="event-card-strip-band" style="background:${isJoint ? '#BA7517' : cat.color}"></div>
           ${isJoint ? `<span class="event-card-strip-joint">Joint</span>` : ''}
+          ${e.mandatory ? `<span class="event-card-strip-required">Required</span>` : ''}
           <div class="event-card-strip-inner">
             <div class="event-card-strip-date">
               <span class="event-card-strip-day">${dy}</span>
@@ -408,6 +451,41 @@ function renderDashboard() {
           </div>
         </div>`;
       }).join('');
+
+  // Fellowship shared space section
+  renderSharedSpace();
+}
+
+function renderSharedSpace() {
+  const el = document.getElementById('fellowshipSharedSpace');
+  if (!el) return;
+  // Show joint events visible to all
+  const sharedEvents = ALL_EVENTS
+    .filter(e => e.course === 'joint' && !e.hidden)
+    .sort((a,b) => a.date.localeCompare(b.date))
+    .slice(0, 5);
+  if (!sharedEvents.length) {
+    el.innerHTML = `<div style="font-size:13px;color:var(--gray-mid);padding:0.5rem 0">No upcoming shared events.</div>`;
+    return;
+  }
+  el.innerHTML = sharedEvents.map(e => {
+    const cat = CAT[e.cat];
+    const [yr,mo,dy] = e.date.split('-').map(Number);
+    const mon = MONTHS_FULL[mo-1].slice(0,3).toUpperCase();
+    const rsvpd = rsvpSet.has(e.id);
+    const needsRsvp = e.cat === 'guest' || e.course === 'joint';
+    return `<div class="shared-event-row">
+      <div class="shared-event-date"><span>${dy}</span><span>${mon}</span></div>
+      <div class="shared-event-body">
+        <div class="shared-event-title">${e.title}</div>
+        <div class="shared-event-cat" style="color:${cat.color}">${cat.label}</div>
+      </div>
+      ${needsRsvp ? (e.locked
+        ? `<span class="rsvp-btn" style="opacity:0.4;cursor:not-allowed;border-style:dashed">🔒</span>`
+        : `<button onclick="toggleRsvp(event,${e.id})" class="rsvp-btn${rsvpd?' rsvpd':''}" id="rsvp-btn-${e.id}">${rsvpd?'✓ Going':'RSVP'}</button>`)
+        : ''}
+    </div>`;
+  }).join('');
 }
 
 
@@ -416,12 +494,18 @@ function renderDashboard() {
 function renderDashboardAnnouncements() {
   const el = document.getElementById('dashboardAnnouncements');
   if (!el) return;
+  // Filter by week if set
+  let visible = announcements;
+  if (annWeekFilter) {
+    visible = announcements.filter(a => !a.week_tag || a.week_tag === annWeekFilter);
+  }
   el.innerHTML = `<div class="section-label">Announcements</div>` +
-    (announcements.length
-      ? announcements.map(a => {
+    (visible.length
+      ? visible.map(a => {
           const c = ANN_COLORS[a.color] || ANN_COLORS.maroon;
+          const weekLabel = a.week_tag ? `<span class="ann-week-badge">Week ${a.week_tag}</span>` : '';
           return `<div class="announcement" style="border-left-color:${c.border};background:${c.bg}">
-            <div class="announcement-title">${a.title}</div>
+            <div class="announcement-title">${a.title}${weekLabel}</div>
             <div class="announcement-body">${a.body}</div>
           </div>`;
         }).join('')
@@ -432,13 +516,16 @@ function renderDashboardAnnouncements() {
 function renderAdminAnnouncements() {
   const el = document.getElementById('adminAnnouncementList');
   if (!el) return;
-  if (!announcements.length) { el.innerHTML = '<p style="color:var(--gray-mid);font-size:13px;padding:1rem 0">No announcements yet.</p>'; return; }
+  if (!announcements.length) {
+    el.innerHTML = '<p style="color:var(--gray-mid);font-size:13px;padding:1rem 0">No announcements yet.</p>';
+    return;
+  }
   el.innerHTML = announcements.map(a => {
     const c = ANN_COLORS[a.color] || ANN_COLORS.maroon;
     return `<div class="admin-list-row">
       <div class="admin-list-accent" style="background:${c.border}"></div>
       <div class="admin-list-body">
-        <div class="admin-list-title">${a.title}</div>
+        <div class="admin-list-title">${a.title}${a.week_tag ? ` <span class="ann-week-badge">Week ${a.week_tag}</span>` : ''}</div>
         <div class="admin-list-meta">${a.body.slice(0,90)}${a.body.length>90?'…':''}</div>
       </div>
       <div class="admin-list-actions">
@@ -450,16 +537,18 @@ function renderAdminAnnouncements() {
 }
 
 async function addAnnouncement() {
-  const title = document.getElementById('ann-title').value.trim();
-  const body  = document.getElementById('ann-body').value.trim();
-  const color = document.getElementById('ann-color').value;
+  const title    = document.getElementById('ann-title').value.trim();
+  const body     = document.getElementById('ann-body').value.trim();
+  const color    = document.getElementById('ann-color').value;
+  const week_tag = document.getElementById('ann-week').value.trim();
   if (!title || !body) return;
-  const res = await api('POST', '/api/announcements', { title, body, color });
+  const res = await api('POST', '/api/announcements', { title, body, color, week_tag });
   if (res.ok) {
     const data = await res.json();
     announcements.unshift(data);
     document.getElementById('ann-title').value = '';
     document.getElementById('ann-body').value  = '';
+    document.getElementById('ann-week').value  = '';
     renderAdminAnnouncements();
     renderDashboardAnnouncements();
   }
@@ -478,21 +567,27 @@ async function deleteAnnouncement(id) {
 // ── EVENTS (ADMIN) ────────────────────────────────────────────────────────────
 
 async function adminAddEvent() {
-  const title  = document.getElementById('ev-title').value.trim();
-  const date   = document.getElementById('ev-date').value;
-  const cat    = document.getElementById('ev-cat').value;
-  const note   = document.getElementById('ev-note').value.trim();
-  const course = document.getElementById('ev-course').value;
+  const title          = document.getElementById('ev-title').value.trim();
+  const date           = document.getElementById('ev-date').value;
+  const cat            = document.getElementById('ev-cat').value;
+  const note           = document.getElementById('ev-note').value.trim();
+  const description    = document.getElementById('ev-description').value.trim();
+  const eventbrite_url = document.getElementById('ev-eventbrite').value.trim();
+  const is_mandatory   = document.getElementById('ev-mandatory').checked;
+  const course         = document.getElementById('ev-course').value;
   if (!title || !date) return;
-  const res = await api('POST', '/api/events', { title, date, cat, note, course });
+  const res = await api('POST', '/api/events', { title, date, cat, note, description, eventbrite_url, is_mandatory, course });
   if (res.ok) {
     const data = await res.json();
     ALL_EVENTS.push(transformEvent(data));
     ALL_EVENTS.sort((a,b) => a.date.localeCompare(b.date));
     updateCourseEvents();
-    document.getElementById('ev-title').value = '';
-    document.getElementById('ev-date').value  = '';
-    document.getElementById('ev-note').value  = '';
+    document.getElementById('ev-title').value       = '';
+    document.getElementById('ev-date').value        = '';
+    document.getElementById('ev-note').value        = '';
+    document.getElementById('ev-description').value = '';
+    document.getElementById('ev-eventbrite').value  = '';
+    document.getElementById('ev-mandatory').checked = false;
     renderCalendar();
     renderDashboard();
     renderAdminEvents(eventsFilter);
@@ -523,7 +618,7 @@ async function toggleEventHidden(id) {
   if (!e) return;
   const res = await api('PATCH', `/api/events/${id}`, { is_hidden: e.hidden ? 0 : 1 });
   if (res.ok) {
-    e.hidden   = !e.hidden;
+    e.hidden    = !e.hidden;
     e.is_hidden = e.hidden ? 1 : 0;
     renderCalendar();
     renderDashboard();
@@ -536,7 +631,7 @@ async function toggleEventLocked(id) {
   if (!e) return;
   const res = await api('PATCH', `/api/events/${id}`, { is_locked: e.locked ? 0 : 1 });
   if (res.ok) {
-    e.locked   = !e.locked;
+    e.locked    = !e.locked;
     e.is_locked = e.locked ? 1 : 0;
     renderCalendar();
     renderAdminEvents(eventsFilter);
@@ -550,11 +645,14 @@ function renderAdminEvents(filter) {
   const filtered = ALL_EVENTS.filter(e => filter === 'all' || e.course === filter)
     .sort((a,b) => a.date.localeCompare(b.date));
   if (countEl) countEl.textContent = `(${filtered.length})`;
-  if (!filtered.length) { list.innerHTML = '<p style="color:var(--gray-mid);font-size:13px;padding:1rem 0">No events match this filter.</p>'; return; }
+  if (!filtered.length) {
+    list.innerHTML = '<p style="color:var(--gray-mid);font-size:13px;padding:1rem 0">No events match this filter.</p>';
+    return;
+  }
   list.innerHTML = filtered.map(e => {
     const cat = CAT[e.cat];
-    const cc = courseColor(e.course);
-    const cl = courseLabel(e.course);
+    const cc  = courseColor(e.course);
+    const cl  = courseLabel(e.course);
     const [yr,mo,dy] = e.date.split('-').map(Number);
     const mon = MONTHS_FULL[mo-1].slice(0,3).toUpperCase();
     return `<div class="admin-list-row" style="${e.hidden?'opacity:0.5':''}">
@@ -564,10 +662,14 @@ function renderAdminEvents(filter) {
         <div style="font-size:9px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--gray-mid)">${mon}</div>
       </div>
       <div class="admin-list-body">
-        <div class="admin-list-title" style="${e.locked?'text-decoration:line-through':''}">${e.title}</div>
+        <div class="admin-list-title" style="${e.locked?'text-decoration:line-through':''}">
+          ${e.title}
+          ${e.mandatory ? `<span class="badge-mandatory" style="margin-left:6px">Required</span>` : ''}
+        </div>
         <div class="admin-list-meta">
           ${cat.label}
           ${cl ? `<span class="badge" style="background:${cc}18;color:${cc};font-size:10px;margin-left:4px">${cl}</span>` : ''}
+          ${e.eventbrite_url ? ` · <span style="color:#185FA5;font-size:10px">Eventbrite</span>` : ''}
           ${e.note ? ' · ' + e.note.split('·')[0].trim() : ''}
         </div>
       </div>
@@ -597,6 +699,10 @@ async function toggleRsvp(e, eventId) {
   }
 }
 
+function downloadIcs(eventId) {
+  window.location.href = `/api/events/${eventId}/ics`;
+}
+
 function getRsvpableEvents() {
   return ALL_EVENTS.filter(e => e.cat === 'guest' || e.course === 'joint')
     .sort((a,b) => a.date.localeCompare(b.date));
@@ -607,12 +713,11 @@ async function renderAdminRsvps() {
   const sumEl = document.getElementById('rsvpSummary');
   if (!el) return;
 
-  // Load all RSVPs for admin view
   const res = await fetch('/api/rsvps/all');
   if (res.ok) allRsvps = await res.json();
 
   const totalRsvpCount = Object.values(allRsvps).reduce((s,a) => s + a.length, 0);
-  const rsvpEvents = getRsvpableEvents();
+  const rsvpEvents     = getRsvpableEvents();
 
   if (sumEl) {
     sumEl.innerHTML = `
@@ -621,15 +726,18 @@ async function renderAdminRsvps() {
       <div class="admin-rsvp-card"><div class="admin-rsvp-num">${totalRsvpCount}</div><div class="admin-rsvp-label">Confirmed RSVPs</div></div>`;
   }
 
-  if (!rsvpEvents.length) { el.innerHTML = '<p style="color:var(--gray-mid);font-size:13px">No RSVPable events found.</p>'; return; }
+  if (!rsvpEvents.length) {
+    el.innerHTML = '<p style="color:var(--gray-mid);font-size:13px">No RSVPable events found.</p>';
+    return;
+  }
 
   el.innerHTML = rsvpEvents.map(e => {
     const cat = CAT[e.cat];
     const [yr,mo,dy] = e.date.split('-').map(Number);
-    const mon = MONTHS_FULL[mo-1].slice(0,3).toUpperCase();
+    const mon       = MONTHS_FULL[mo-1].slice(0,3).toUpperCase();
     const confirmed = (allRsvps[e.id] || []).length;
-    const pct = students.length > 0 ? Math.round((confirmed / students.length) * 100) : 0;
-    const names = (allRsvps[e.id] || []).map(r => r.name).join(', ');
+    const pct       = students.length > 0 ? Math.round((confirmed / students.length) * 100) : 0;
+    const names     = (allRsvps[e.id] || []).map(r => r.name).join(', ');
     return `<div class="admin-list-row">
       <div class="admin-list-accent" style="background:${e.course==='joint'?'#BA7517':cat.color}"></div>
       <div style="min-width:48px;text-align:center;flex-shrink:0">
@@ -684,6 +792,9 @@ function renderModuleRow(mod) {
   const isOpen = openModuleId === mod.id;
   const tab    = activeTab[mod.id] || 'overview';
   const statusColor = mod.status==='Complete' ? '#1D9E75' : mod.status==='In progress' ? accent : '#888';
+  const updatedStr = mod.last_updated_at
+    ? `<span style="font-size:10px;color:var(--gray-mid);margin-left:8px">Updated ${mod.last_updated_at.split(' ')[0]}${mod.last_updated_by?' by '+mod.last_updated_by:''}</span>`
+    : '';
   return `<div class="syl-module${isOpen?' open':''}" id="syl-mod-${mod.id}">
     <div class="syl-module-header" onclick="toggleModule(${mod.id})">
       <div class="syl-module-accent" style="background:${accent}"></div>
@@ -691,6 +802,7 @@ function renderModuleRow(mod) {
         <div class="syl-module-left">
           <span class="syl-module-label" style="color:${accent}">${mod.label}</span>
           <span class="syl-module-title">${mod.title}</span>
+          ${updatedStr}
         </div>
         <div class="syl-module-meta">
           <div class="syl-module-progress-bar"><div class="syl-module-progress-fill" style="width:${mod.progress}%;background:${accent}"></div></div>
@@ -730,6 +842,7 @@ function renderTabPanel(mod, name, isActive) {
         <div class="syl-status-row"><span class="syl-status-key">Sessions</span><span class="syl-status-val">${mod.sessions.length}</span></div>
         <div class="syl-status-row"><span class="syl-status-key">Deliverables</span><span class="syl-status-val">${mod.deliverables.length}</span></div>
         <div class="syl-status-row"><span class="syl-status-key">Readings</span><span class="syl-status-val">${(mod.readings||[]).length}</span></div>
+        ${mod.last_updated_at ? `<div class="syl-status-row"><span class="syl-status-key">Updated</span><span class="syl-status-val">${mod.last_updated_at.split(' ')[0]}</span></div>` : ''}
       </div>
     </div>`;
   }
@@ -781,7 +894,7 @@ function renderTabPanel(mod, name, isActive) {
   else if (name === 'events') {
     const courseId = mod.course || (mod.id >= 10 ? 'psc31330' : 'psc31180');
     const sessionTitles = new Set(mod.sessions.map(s => s.title.toLowerCase().slice(0,30)));
-    const linkedEvents = ALL_EVENTS
+    const linkedEvents  = ALL_EVENTS
       .filter(e =>
         (e.course === courseId || e.course === 'joint') &&
         (sessionTitles.has(e.title.toLowerCase().slice(0,30)) ||
@@ -796,12 +909,12 @@ function renderTabPanel(mod, name, isActive) {
       </div>`;
     } else {
       html = linkedEvents.map(e => {
-        const cat = CAT[e.cat];
+        const cat     = CAT[e.cat];
         const isJoint = e.course === 'joint';
         const [yr,mo,dy] = e.date.split('-').map(Number);
-        const mon = MONTHS_FULL[mo-1].slice(0,3).toUpperCase();
+        const mon     = MONTHS_FULL[mo-1].slice(0,3).toUpperCase();
         const needsRsvp = e.cat === 'guest' || isJoint;
-        const rsvpd = rsvpSet.has(e.id);
+        const rsvpd   = rsvpSet.has(e.id);
         return `<div class="syl-session-row" style="align-items:center">
           <div class="syl-session-date" style="min-width:64px">
             <span style="font-size:1.3rem;font-weight:700;line-height:1;color:var(--gray-brand);display:block;letter-spacing:-0.5px">${dy}</span>
@@ -812,6 +925,7 @@ function renderTabPanel(mod, name, isActive) {
             <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">
               <span style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${isJoint?'#BA7517':cat.color}">${cat.label}</span>
               ${isJoint ? `<span class="syl-joint-badge">Joint</span>` : ''}
+              ${e.mandatory ? `<span class="badge-mandatory">Required</span>` : ''}
               ${e.note ? `<span style="font-size:11px;color:var(--gray-mid)">${e.note.split('·')[0].trim()}</span>` : ''}
             </div>
           </div>
@@ -914,6 +1028,7 @@ function renderAdminSyllabus() {
             <input class="form-input" type="number" min="0" max="100" id="asyl-prog-${mod.id}" value="${mod.progress}">
           </div>
         </div>
+        ${mod.last_updated_at ? `<p style="font-size:11px;color:var(--gray-mid);margin-bottom:1rem">Last saved: ${mod.last_updated_at.split(' ')[0]}${mod.last_updated_by?' by '+mod.last_updated_by:''}</p>` : ''}
         <button class="admin-btn-primary" onclick="saveModuleEdit(${mod.id})">Save changes</button>
       </div>
     </div>`;
@@ -938,6 +1053,7 @@ async function saveModuleEdit(id) {
   if (res.ok) {
     mod.title = title; mod.weeks = weeks; mod.description = description;
     mod.desc  = description; mod.status = status; mod.progress = progress;
+    mod.last_updated_at = new Date().toISOString().slice(0,10);
     renderModulesList();
     renderAdminSyllabus();
     const btn = document.querySelector(`#asyl-${id} .admin-btn-primary`);
@@ -967,9 +1083,21 @@ async function addStudent() {
 }
 
 async function removeStudent(id) {
+  if (!confirm('Permanently delete this student? Use "Deactivate" to keep their data as alumni.')) return;
   const res = await api('DELETE', `/api/students/${id}`);
   if (res.ok) {
     students = students.filter(s => s.id !== id);
+    renderAdminStudents();
+  }
+}
+
+async function toggleStudentActive(id) {
+  const s = students.find(s => s.id === id);
+  if (!s) return;
+  const res = await api('POST', `/api/students/${id}/toggle-active`);
+  if (res.ok) {
+    const data = await res.json();
+    s.is_active = data.is_active;
     renderAdminStudents();
   }
 }
@@ -984,7 +1112,7 @@ async function importStudentsCSV() {
   }
   const formData = new FormData();
   formData.append('file', fileInput.files[0]);
-  const res = await fetch('/api/students/import', { method: 'POST', body: formData });
+  const res  = await fetch('/api/students/import', { method:'POST', body: formData });
   const data = await res.json();
   if (res.ok) {
     resultEl.style.color = '#1D9E75';
@@ -1009,29 +1137,57 @@ function downloadCsvTemplate(e) {
   URL.revokeObjectURL(url);
 }
 
+let showInactiveStudents = false;
+
 function renderAdminStudents() {
   const el      = document.getElementById('adminStudentList');
   const countEl = document.getElementById('studentCount');
   if (!el) return;
-  if (countEl) countEl.textContent = `(${students.length})`;
-  if (!students.length) { el.innerHTML = '<p style="color:var(--gray-mid);font-size:13px;padding:1rem 0">No students enrolled yet.</p>'; return; }
-  el.innerHTML = students.map(s => {
-    const c  = COURSES[s.course];
-    const cc = c ? c.color : 'var(--gray-mid)';
-    return `<div class="admin-list-row">
-      <div class="admin-list-accent" style="background:${cc}"></div>
+  const active   = students.filter(s => s.is_active);
+  const inactive = students.filter(s => !s.is_active);
+  if (countEl) countEl.textContent = `(${active.length} active${inactive.length ? ', ' + inactive.length + ' alumni' : ''})`;
+
+  const visible = showInactiveStudents ? students : active;
+  if (!visible.length) {
+    el.innerHTML = '<p style="color:var(--gray-mid);font-size:13px;padding:1rem 0">No students enrolled yet.</p>';
+    return;
+  }
+
+  const toggleBtn = document.getElementById('toggleInactiveBtn');
+  if (toggleBtn) {
+    toggleBtn.textContent = showInactiveStudents
+      ? `Hide alumni (${inactive.length})`
+      : `Show alumni (${inactive.length})`;
+    toggleBtn.style.display = inactive.length ? '' : 'none';
+  }
+
+  el.innerHTML = visible.map(s => {
+    const c   = COURSES[s.course];
+    const cc  = c ? c.color : 'var(--gray-mid)';
+    const isAlumni = !s.is_active;
+    return `<div class="admin-list-row" style="opacity:${isAlumni?0.6:1}">
+      <div class="admin-list-accent" style="background:${isAlumni?'#bbb':cc}"></div>
       <div style="width:34px;height:34px;border-radius:50%;background:${cc}18;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12px;font-weight:700;color:${cc}">
         ${(s.name||'?').split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase()}
       </div>
       <div class="admin-list-body">
-        <div class="admin-list-title">${s.name}</div>
+        <div class="admin-list-title">
+          ${s.name}
+          ${isAlumni ? `<span style="font-size:10px;font-weight:700;background:var(--gray-light);color:var(--gray-mid);padding:2px 7px;margin-left:6px">Alumni</span>` : ''}
+        </div>
         <div class="admin-list-meta">${s.email} &middot; ${c ? c.code : s.course} &middot; <span style="font-family:monospace">@${s.username}</span></div>
       </div>
       <div class="admin-list-actions">
+        <button class="admin-btn-secondary" style="padding:5px 10px;font-size:10px" onclick="toggleStudentActive(${s.id})">${isAlumni?'Reactivate':'Deactivate'}</button>
         <button class="admin-btn-danger" onclick="removeStudent(${s.id})">Remove</button>
       </div>
     </div>`;
   }).join('');
+}
+
+function toggleInactiveStudents() {
+  showInactiveStudents = !showInactiveStudents;
+  renderAdminStudents();
 }
 
 
@@ -1131,6 +1287,8 @@ function switchAdminTab(name) {
   if (name === 'syllabus')      renderAdminSyllabus();
   if (name === 'students')      renderAdminStudents();
   if (name === 'users')         renderAdminUsers();
+  if (name === 'finance')       renderAdminFinance();
+  if (name === 'resources')     renderAdminResources();
 }
 
 
@@ -1204,7 +1362,9 @@ function renderCalendar() {
     const pills = evs.slice(0,maxShow).map(e => {
       const cat = CAT[e.cat];
       const cc  = courseColor(e.course);
-      return `<span class="cal-pill" style="background:${e.locked?'#f0f0f0':cat.bg};color:${e.locked?'#999':cat.color};border-left:2px solid ${e.locked?'#ccc':cc};${e.locked?'text-decoration:line-through':''}">${e.hidden?'[hidden] ':''}${e.locked?'🔒 ':''}${e.title}</span>`;
+      return `<span class="cal-pill" style="background:${e.locked?'#f0f0f0':cat.bg};color:${e.locked?'#999':cat.color};border-left:2px solid ${e.locked?'#ccc':cc};${e.locked?'text-decoration:line-through':''}">
+        ${e.hidden?'[hidden] ':''}${e.locked?'🔒 ':''}${e.mandatory?'★ ':''}${e.title}
+      </span>`;
     }).join('');
     const more = evs.length > maxShow ? `<span class="cal-more">+${evs.length-maxShow} more</span>` : '';
     return `<div class="cal-cell${c.other?' other-month':''}${isToday?' today':''}" onclick="openDayPanel('${dateStr}')">
@@ -1228,16 +1388,16 @@ function changeMonth(dir) {
 
 function openDayPanel(dateStr) {
   selectedDate = dateStr;
-  panelMode = 'day';
-  const [y,m,d] = dateStr.split('-');
-  const dateObj  = new Date(parseInt(y), parseInt(m)-1, parseInt(d));
+  panelMode    = 'day';
+  const [y,m,d]  = dateStr.split('-');
+  const dateObj   = new Date(parseInt(y), parseInt(m)-1, parseInt(d));
   const monthName = MONTHS_FULL[parseInt(m)-1];
   const weekday   = WEEKDAYS[dateObj.getDay()];
-  document.getElementById('panelEyebrow').textContent = weekday;
-  document.getElementById('panelDateBig').innerHTML   = `<strong>${monthName}</strong> ${parseInt(d)}`;
-  document.getElementById('panelDateYear').textContent = y;
-  document.getElementById('panelGhost').textContent   = parseInt(d);
-  const evs = eventsForDate(dateStr);
+  document.getElementById('panelEyebrow').textContent   = weekday;
+  document.getElementById('panelDateBig').innerHTML     = `<strong>${monthName}</strong> ${parseInt(d)}`;
+  document.getElementById('panelDateYear').textContent  = y;
+  document.getElementById('panelGhost').textContent     = parseInt(d);
+  const evs   = eventsForDate(dateStr);
   const count = evs.length;
   document.getElementById('panelCountLabel').textContent = count === 0 ? 'No events' : count === 1 ? '1 event' : `${count} events`;
   document.getElementById('panelAddBtn').onclick = showAddForm;
@@ -1271,19 +1431,28 @@ function renderDayBody(dateStr) {
       ${e.hidden ? `<span class="admin-status-chip" style="background:#333;color:#ccc;margin-right:4px">Hidden</span>` : ''}
       ${e.locked ? `<span class="admin-status-chip" style="background:#FAECE7;color:#D85A30;margin-right:4px">🔒 Locked</span>` : ''}
     ` : '';
+    const mandatoryBadge = e.mandatory ? `<span class="badge-mandatory" style="margin-left:4px">Required</span>` : '';
     const rsvpBtn = needsRsvp
       ? (e.locked
           ? `<span class="rsvp-btn" style="opacity:0.4;cursor:not-allowed;border-style:dashed;display:inline-block;margin-top:10px">🔒 Locked</span>`
           : `<button onclick="toggleRsvp(event,${e.id})" class="rsvp-btn${rsvpd?' rsvpd':''}" id="rsvp-btn-${e.id}" style="margin-top:10px">${rsvpd?'✓ Going':'RSVP'}</button>`)
       : '';
+    const calBtn  = `<button class="btn-sm" onclick="downloadIcs(${e.id})" style="margin-top:8px;font-size:11px;display:inline-flex;align-items:center;gap:5px">📅 Add to calendar</button>`;
+    const ebBtn   = e.eventbrite_url ? `<a href="${e.eventbrite_url}" target="_blank" rel="noopener" class="btn-sm btn-primary" style="margin-top:8px;font-size:11px;display:inline-flex;align-items:center;gap:5px;text-decoration:none">🎟 Register on Eventbrite</a>` : '';
+    const descHtml = e.description ? `<div class="panel-event-desc">${e.description}</div>` : '';
     return `<div class="panel-event-item" style="${e.hidden&&!isStudentMode?'opacity:0.6':''}">
       <div class="panel-event-accent" style="background:${e.locked?'#ccc':cat.color}"></div>
       <div class="panel-event-content">
-        <div class="panel-event-cat" style="color:${cat.color}">${cat.label}${cl?`<span class="course-badge" style="background:${cc}22;color:${cc}">${cl}</span>`:''}</div>
+        <div class="panel-event-cat" style="color:${cat.color}">${cat.label}${cl?`<span class="course-badge" style="background:${cc}22;color:${cc}">${cl}</span>`:''}${mandatoryBadge}</div>
         <div class="panel-event-title">${e.title}</div>
         ${adminBadges}
         ${e.note ? `<div class="panel-event-note">${e.note}</div>` : ''}
-        ${rsvpBtn}
+        ${descHtml}
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+          ${rsvpBtn}
+          ${ebBtn}
+          ${calBtn}
+        </div>
       </div>
       ${!isStudentMode ? `<button class="panel-event-delete" onclick="deleteEvent(${e.id})" title="Remove">Remove</button>` : ''}
     </div>`;
@@ -1321,7 +1490,19 @@ function showAddForm() {
       </div>
       <div class="form-group">
         <label class="form-label">Note <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
-        <textarea class="form-input" id="fNote" placeholder="Details, links, or context…"></textarea>
+        <textarea class="form-input" id="fNote" placeholder="Location, details…"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
+        <textarea class="form-input" id="fDesc" rows="3" placeholder="Longer description or context…"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Eventbrite URL <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
+        <input class="form-input" id="fEventbrite" type="url" placeholder="https://www.eventbrite.com/e/...">
+      </div>
+      <div class="form-group" style="display:flex;align-items:center;gap:10px">
+        <input type="checkbox" id="fMandatory" style="width:16px;height:16px;accent-color:var(--maroon)">
+        <label for="fMandatory" class="form-label" style="margin:0;cursor:pointer">Mark as required / mandatory</label>
       </div>
     </div>`;
   document.getElementById('panelFooter').style.display = 'block';
@@ -1343,13 +1524,16 @@ function openAddForm(dateStr) {
 }
 
 async function saveEvent() {
-  const title  = document.getElementById('fTitle').value.trim();
-  const date   = document.getElementById('fDate').value;
-  const cat    = document.getElementById('fCat').value;
-  const note   = document.getElementById('fNote').value.trim();
+  const title          = document.getElementById('fTitle').value.trim();
+  const date           = document.getElementById('fDate').value;
+  const cat            = document.getElementById('fCat').value;
+  const note           = document.getElementById('fNote').value.trim();
+  const description    = document.getElementById('fDesc').value.trim();
+  const eventbrite_url = document.getElementById('fEventbrite').value.trim();
+  const is_mandatory   = document.getElementById('fMandatory').checked;
   if (!title || !date) { document.getElementById('fTitle').style.borderColor = '#A32D2D'; return; }
   const course = activeCourse === 'all' ? 'joint' : activeCourse;
-  const res = await api('POST', '/api/events', { title, date, cat, note, course });
+  const res = await api('POST', '/api/events', { title, date, cat, note, description, eventbrite_url, is_mandatory, course });
   if (res.ok) {
     const data = await res.json();
     ALL_EVENTS.push(transformEvent(data));
@@ -1382,6 +1566,214 @@ function closePanel() {
   document.getElementById('panelOverlay').classList.remove('open');
   document.getElementById('panelAddBtn').style.display = '';
   panelMode = null; selectedDate = null;
+}
+
+
+// ── FINANCE ───────────────────────────────────────────────────────────────────
+
+function renderFinance() {
+  const el = document.getElementById('financeChecklist');
+  if (!el) return;
+  const done  = financeItems.filter(i => financeChecked.has(i.id)).length;
+  const total = financeItems.length;
+  const pct   = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  const progressEl = document.getElementById('financeProgress');
+  if (progressEl) {
+    progressEl.innerHTML = `
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+        <span style="font-size:13px;font-weight:600;color:var(--gray-brand)">${done} of ${total} completed</span>
+        <span style="font-size:13px;font-weight:700;color:var(--maroon)">${pct}%</span>
+      </div>
+      <div style="height:6px;background:var(--gray-border);border-radius:3px">
+        <div style="width:${pct}%;height:100%;background:var(--maroon);border-radius:3px;transition:width 0.3s"></div>
+      </div>`;
+  }
+
+  if (!financeItems.length) {
+    el.innerHTML = `<div style="font-size:13px;color:var(--gray-mid);padding:2rem 0;text-align:center">No finance items have been added yet.<br><span style="font-size:12px">Your instructor will add W-2s, stipend info, and FAFSA reminders here.</span></div>`;
+    return;
+  }
+
+  const cats = [...new Set(financeItems.map(i => i.category))];
+  el.innerHTML = cats.map(cat => {
+    const items = financeItems.filter(i => i.category === cat);
+    return `<div class="finance-cat-group">
+      <div class="finance-cat-label">${cat.charAt(0).toUpperCase() + cat.slice(1)}</div>
+      ${items.map(item => {
+        const checked = financeChecked.has(item.id);
+        return `<div class="finance-item${checked?' checked':''}">
+          <button class="finance-checkbox${checked?' checked':''}" onclick="toggleFinanceCheck(${item.id})" title="${checked?'Mark incomplete':'Mark complete'}">
+            ${checked ? '&#10003;' : ''}
+          </button>
+          <div class="finance-item-body">
+            <div class="finance-item-title">${item.title}${item.is_required?` <span class="badge-mandatory">Required</span>`:''}</div>
+            ${item.description ? `<div class="finance-item-desc">${item.description}</div>` : ''}
+            ${item.due_label ? `<div class="finance-item-due">Due: ${item.due_label}</div>` : ''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }).join('');
+}
+
+async function toggleFinanceCheck(itemId) {
+  const res = await api('POST', `/api/finance/${itemId}/check`);
+  if (res.ok) {
+    const data = await res.json();
+    if (data.checked) financeChecked.add(itemId);
+    else financeChecked.delete(itemId);
+    const item = financeItems.find(i => i.id === itemId);
+    if (item) item.checked = data.checked;
+    renderFinance();
+  }
+}
+
+// Admin finance management
+function renderAdminFinance() {
+  const el = document.getElementById('adminFinanceList');
+  if (!el) return;
+  if (!financeItems.length) {
+    el.innerHTML = '<p style="color:var(--gray-mid);font-size:13px;padding:1rem 0">No finance items yet. Add W-2 reminders, FAFSA deadlines, stipend info, etc.</p>';
+    return;
+  }
+  el.innerHTML = financeItems.map(item => `
+    <div class="admin-list-row">
+      <div class="admin-list-accent" style="background:var(--maroon)"></div>
+      <div class="admin-list-body">
+        <div class="admin-list-title">${item.title}${item.is_required?` <span class="badge-mandatory">Required</span>`:''}</div>
+        <div class="admin-list-meta">${item.category}${item.due_label?' · Due: '+item.due_label:''}${item.description?' · '+item.description.slice(0,60):''}</div>
+      </div>
+      <div class="admin-list-actions">
+        <button class="admin-btn-danger" onclick="deleteFinanceItem(${item.id})">Delete</button>
+      </div>
+    </div>`).join('');
+}
+
+async function addFinanceItem() {
+  const title       = document.getElementById('fin-title').value.trim();
+  const description = document.getElementById('fin-desc').value.trim();
+  const due_label   = document.getElementById('fin-due').value.trim();
+  const category    = document.getElementById('fin-cat').value;
+  const is_required = document.getElementById('fin-required').checked;
+  if (!title) return;
+  const res = await api('POST', '/api/finance', { title, description, due_label, category, is_required });
+  if (res.ok) {
+    const data = await res.json();
+    data.checked = false;
+    financeItems.push(data);
+    document.getElementById('fin-title').value = '';
+    document.getElementById('fin-desc').value  = '';
+    document.getElementById('fin-due').value   = '';
+    renderAdminFinance();
+  }
+}
+
+async function deleteFinanceItem(id) {
+  const res = await api('DELETE', `/api/finance/${id}`);
+  if (res.ok) {
+    financeItems = financeItems.filter(i => i.id !== id);
+    financeChecked.delete(id);
+    renderAdminFinance();
+    renderFinance();
+  }
+}
+
+
+// ── RESOURCES ─────────────────────────────────────────────────────────────────
+
+function renderResources() {
+  const el = document.getElementById('resourcesList');
+  if (!el) return;
+
+  const cats = [...new Set(resources.map(r => r.category))];
+  if (!resources.length) {
+    el.innerHTML = `<div style="font-size:13px;color:var(--gray-mid);padding:2rem 0;text-align:center">No resources added yet.<br><span style="font-size:12px">Your instructor will add links to forms, guides, and documents here.</span></div>`;
+    return;
+  }
+
+  // Build category dropdown nav
+  const navEl = document.getElementById('resourcesNav');
+  if (navEl) {
+    navEl.innerHTML = cats.map(cat => {
+      const cl = RESOURCE_CATS[cat] || { label: cat, color: '#6b6b6b' };
+      return `<a href="#res-cat-${cat}" class="resource-nav-link" style="color:${cl.color}">${cl.label}</a>`;
+    }).join('');
+  }
+
+  el.innerHTML = cats.map(cat => {
+    const cl    = RESOURCE_CATS[cat] || { label: cat, color: '#6b6b6b' };
+    const items = resources.filter(r => r.category === cat);
+    return `<div class="resource-cat-section" id="res-cat-${cat}">
+      <div class="resource-cat-title" style="color:${cl.color}">${cl.label}</div>
+      <div class="resource-items-grid">
+        ${items.map(r => `
+          <a href="${r.url || '#'}" target="_blank" rel="noopener" class="resource-card" style="${!r.url?'pointer-events:none;opacity:0.6':''}">
+            <div class="resource-card-title">${r.title}</div>
+            ${r.description ? `<div class="resource-card-desc">${r.description}</div>` : ''}
+            ${r.url ? `<div class="resource-card-link">Open →</div>` : '<div class="resource-card-link" style="color:var(--gray-mid)">No link yet</div>'}
+          </a>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderAdminResources() {
+  const el = document.getElementById('adminResourceList');
+  if (!el) return;
+  if (!resources.length) {
+    el.innerHTML = '<p style="color:var(--gray-mid);font-size:13px;padding:1rem 0">No resources yet.</p>';
+    return;
+  }
+  el.innerHTML = resources.map(r => {
+    const cl = RESOURCE_CATS[r.category] || { label: r.category, color: '#6b6b6b' };
+    return `<div class="admin-list-row">
+      <div class="admin-list-accent" style="background:${cl.color}"></div>
+      <div class="admin-list-body">
+        <div class="admin-list-title">${r.title}</div>
+        <div class="admin-list-meta">${cl.label}${r.url ? ' · ' + r.url.slice(0,50) : ''}${r.description ? ' · ' + r.description.slice(0,50) : ''}</div>
+      </div>
+      <div class="admin-list-actions">
+        <button class="admin-btn-danger" onclick="deleteResource(${r.id})">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function addResource() {
+  const title       = document.getElementById('res-title').value.trim();
+  const url         = document.getElementById('res-url').value.trim();
+  const description = document.getElementById('res-desc').value.trim();
+  const category    = document.getElementById('res-cat').value;
+  if (!title) return;
+  const res = await api('POST', '/api/resources', { title, url, description, category });
+  if (res.ok) {
+    const data = await res.json();
+    resources.push(data);
+    document.getElementById('res-title').value = '';
+    document.getElementById('res-url').value   = '';
+    document.getElementById('res-desc').value  = '';
+    renderAdminResources();
+    renderResources();
+  }
+}
+
+async function deleteResource(id) {
+  const res = await api('DELETE', `/api/resources/${id}`);
+  if (res.ok) {
+    resources = resources.filter(r => r.id !== id);
+    renderAdminResources();
+    renderResources();
+  }
+}
+
+
+// ── ABOUT PAGE ────────────────────────────────────────────────────────────────
+
+function renderAbout() {
+  const el = document.getElementById('view-about');
+  if (!el) return;
+  // Content is static HTML, already rendered in the template
 }
 
 

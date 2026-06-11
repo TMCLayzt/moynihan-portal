@@ -2,11 +2,11 @@ import os
 import csv
 import io
 import sqlite3
-from datetime import datetime
+from datetime import datetime, date
 from functools import wraps
 
 import bcrypt
-from flask import Flask, g, jsonify, render_template, request, session
+from flask import Flask, g, jsonify, render_template, request, session, Response
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-change-in-production')
@@ -23,6 +23,7 @@ def get_db():
         db = g._database = sqlite3.connect(DATABASE)
         db.row_factory = sqlite3.Row
         db.execute('PRAGMA journal_mode=WAL')
+        db.execute('PRAGMA foreign_keys=ON')
     return db
 
 @app.teardown_appcontext
@@ -35,46 +36,52 @@ def init_db():
     db = sqlite3.connect(DATABASE)
     db.executescript('''
         CREATE TABLE IF NOT EXISTS users (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            username     TEXT    UNIQUE NOT NULL,
-            email        TEXT    DEFAULT '',
-            display_name TEXT    NOT NULL,
-            initials     TEXT    NOT NULL,
-            password_hash TEXT   NOT NULL,
-            role         TEXT    NOT NULL DEFAULT 'student',
-            course       TEXT    DEFAULT 'psc31180',
-            is_active    INTEGER NOT NULL DEFAULT 1,
-            created_at   TEXT    DEFAULT (datetime('now'))
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            username      TEXT    UNIQUE NOT NULL,
+            email         TEXT    DEFAULT '',
+            display_name  TEXT    NOT NULL,
+            initials      TEXT    NOT NULL,
+            password_hash TEXT    NOT NULL,
+            role          TEXT    NOT NULL DEFAULT 'student',
+            course        TEXT    DEFAULT 'psc31180',
+            is_active     INTEGER NOT NULL DEFAULT 1,
+            created_at    TEXT    DEFAULT (datetime('now'))
         );
         CREATE TABLE IF NOT EXISTS events (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            title      TEXT    NOT NULL,
-            date       TEXT    NOT NULL,
-            cat        TEXT    NOT NULL DEFAULT 'lecture',
-            note       TEXT    DEFAULT '',
-            course     TEXT    NOT NULL DEFAULT 'psc31180',
-            is_hidden  INTEGER NOT NULL DEFAULT 0,
-            is_locked  INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT    DEFAULT (datetime('now'))
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            title           TEXT    NOT NULL,
+            date            TEXT    NOT NULL,
+            cat             TEXT    NOT NULL DEFAULT 'lecture',
+            note            TEXT    DEFAULT '',
+            description     TEXT    DEFAULT '',
+            eventbrite_url  TEXT    DEFAULT '',
+            is_mandatory    INTEGER NOT NULL DEFAULT 0,
+            course          TEXT    NOT NULL DEFAULT 'psc31180',
+            is_hidden       INTEGER NOT NULL DEFAULT 0,
+            is_locked       INTEGER NOT NULL DEFAULT 0,
+            created_at      TEXT    DEFAULT (datetime('now'))
         );
         CREATE TABLE IF NOT EXISTS announcements (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
             title      TEXT    NOT NULL,
             body       TEXT    NOT NULL,
             color      TEXT    NOT NULL DEFAULT 'maroon',
+            week_tag   TEXT    DEFAULT '',
             is_active  INTEGER NOT NULL DEFAULT 1,
             created_at TEXT    DEFAULT (datetime('now'))
         );
         CREATE TABLE IF NOT EXISTS modules (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            label       TEXT    NOT NULL,
-            title       TEXT    NOT NULL,
-            description TEXT    DEFAULT '',
-            progress    INTEGER NOT NULL DEFAULT 0,
-            status      TEXT    NOT NULL DEFAULT 'Upcoming',
-            weeks       TEXT    DEFAULT '',
-            course      TEXT    NOT NULL,
-            order_index INTEGER NOT NULL DEFAULT 0
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            label           TEXT    NOT NULL,
+            title           TEXT    NOT NULL,
+            description     TEXT    DEFAULT '',
+            progress        INTEGER NOT NULL DEFAULT 0,
+            status          TEXT    NOT NULL DEFAULT 'Upcoming',
+            weeks           TEXT    DEFAULT '',
+            course          TEXT    NOT NULL,
+            order_index     INTEGER NOT NULL DEFAULT 0,
+            last_updated_at TEXT    DEFAULT NULL,
+            last_updated_by TEXT    DEFAULT ''
         );
         CREATE TABLE IF NOT EXISTS sessions (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -114,7 +121,55 @@ def init_db():
             FOREIGN KEY (user_id)  REFERENCES users(id),
             FOREIGN KEY (event_id) REFERENCES events(id)
         );
+        CREATE TABLE IF NOT EXISTS finance_items (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            title       TEXT    NOT NULL,
+            description TEXT    DEFAULT '',
+            due_label   TEXT    DEFAULT '',
+            category    TEXT    DEFAULT 'document',
+            is_required INTEGER NOT NULL DEFAULT 1,
+            order_index INTEGER NOT NULL DEFAULT 0,
+            created_at  TEXT    DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS student_finance_checks (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    INTEGER NOT NULL,
+            item_id    INTEGER NOT NULL,
+            checked_at TEXT    DEFAULT (datetime('now')),
+            UNIQUE (user_id, item_id),
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            FOREIGN KEY (item_id) REFERENCES finance_items(id)
+        );
+        CREATE TABLE IF NOT EXISTS resources (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            title       TEXT    NOT NULL,
+            url         TEXT    DEFAULT '',
+            description TEXT    DEFAULT '',
+            category    TEXT    DEFAULT 'general',
+            order_index INTEGER NOT NULL DEFAULT 0,
+            is_active   INTEGER NOT NULL DEFAULT 1,
+            created_at  TEXT    DEFAULT (datetime('now'))
+        );
     ''')
+    db.commit()
+    db.close()
+
+def migrate_db():
+    """Safely add new columns to existing tables (idempotent)."""
+    db = sqlite3.connect(DATABASE)
+    migrations = [
+        ('events',      'description',    "TEXT DEFAULT ''"),
+        ('events',      'eventbrite_url', "TEXT DEFAULT ''"),
+        ('events',      'is_mandatory',   'INTEGER NOT NULL DEFAULT 0'),
+        ('modules',     'last_updated_at','TEXT DEFAULT NULL'),
+        ('modules',     'last_updated_by',"TEXT DEFAULT ''"),
+        ('announcements','week_tag',      "TEXT DEFAULT ''"),
+    ]
+    for table, col, coldef in migrations:
+        try:
+            db.execute(f'ALTER TABLE {table} ADD COLUMN {col} {coldef}')
+        except Exception:
+            pass  # column already exists
     db.commit()
     db.close()
 
@@ -177,10 +232,11 @@ def login():
     session['role']     = user['role']
     session['course']   = user['course']
     return jsonify({
-        'role':     user['role'],
-        'display':  user['display_name'],
-        'initials': user['initials'],
-        'course':   user['course'],
+        'role':         user['role'],
+        'display':      user['display_name'],
+        'initials':     user['initials'],
+        'course':       user['course'],
+        'first_name':   user['display_name'].split()[0],
     })
 
 @app.route('/api/logout', methods=['POST'])
@@ -228,17 +284,20 @@ def get_events():
 @admin_required
 def create_event():
     data = request.get_json(silent=True) or {}
-    title  = (data.get('title') or '').strip()
-    date   = (data.get('date') or '').strip()
-    cat    = data.get('cat', 'lecture')
-    note   = data.get('note', '')
-    course = data.get('course', 'psc31180')
-    if not title or not date:
+    title          = (data.get('title') or '').strip()
+    date_val       = (data.get('date') or '').strip()
+    cat            = data.get('cat', 'lecture')
+    note           = data.get('note', '')
+    description    = data.get('description', '')
+    eventbrite_url = data.get('eventbrite_url', '')
+    is_mandatory   = 1 if data.get('is_mandatory') else 0
+    course         = data.get('course', 'psc31180')
+    if not title or not date_val:
         return jsonify({'error': 'Title and date required'}), 400
     db = get_db()
     cur = db.execute(
-        'INSERT INTO events (title, date, cat, note, course) VALUES (?,?,?,?,?)',
-        (title, date, cat, note, course)
+        'INSERT INTO events (title, date, cat, note, description, eventbrite_url, is_mandatory, course) VALUES (?,?,?,?,?,?,?,?)',
+        (title, date_val, cat, note, description, eventbrite_url, is_mandatory, course)
     )
     db.commit()
     row = db.execute('SELECT * FROM events WHERE id = ?', (cur.lastrowid,)).fetchone()
@@ -252,7 +311,9 @@ def update_event(event_id):
     row = db.execute('SELECT * FROM events WHERE id = ?', (event_id,)).fetchone()
     if not row:
         return jsonify({'error': 'Not found'}), 404
-    fields = {k: v for k, v in data.items() if k in ('title','date','cat','note','course','is_hidden','is_locked')}
+    allowed = ('title','date','cat','note','description','eventbrite_url',
+               'is_mandatory','course','is_hidden','is_locked')
+    fields = {k: v for k, v in data.items() if k in allowed}
     if not fields:
         return jsonify({'error': 'No valid fields'}), 400
     set_clause = ', '.join(f'{k} = ?' for k in fields)
@@ -270,6 +331,40 @@ def delete_event(event_id):
     db.commit()
     return jsonify({'ok': True})
 
+@app.route('/api/events/<int:event_id>/ics')
+@login_required
+def download_ics(event_id):
+    db = get_db()
+    ev = db.execute('SELECT * FROM events WHERE id = ?', (event_id,)).fetchone()
+    if not ev:
+        return jsonify({'error': 'Not found'}), 404
+    ev = dict(ev)
+    # Build .ics content
+    dt = ev['date'].replace('-', '')  # YYYYMMDD
+    uid = f"event-{event_id}@moynihan-portal"
+    summary = ev['title'].replace(',', '\\,').replace(';', '\\;')
+    location = (ev.get('note') or '').split('·')[0].strip().replace(',', '\\,')
+    desc = (ev.get('description') or ev.get('note') or '').replace('\n', '\\n')
+    now_str = datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
+    ics = f"""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Moynihan Center//Fellowship Portal//EN
+BEGIN:VEVENT
+UID:{uid}
+DTSTAMP:{now_str}
+DTSTART;VALUE=DATE:{dt}
+DTEND;VALUE=DATE:{dt}
+SUMMARY:{summary}
+LOCATION:{location}
+DESCRIPTION:{desc}
+END:VEVENT
+END:VCALENDAR"""
+    return Response(
+        ics,
+        mimetype='text/calendar',
+        headers={'Content-Disposition': f'attachment; filename="event-{event_id}.ics"'}
+    )
+
 
 # ── ANNOUNCEMENTS API ────────────────────────────────────────────────────────
 
@@ -277,23 +372,32 @@ def delete_event(event_id):
 @login_required
 def get_announcements():
     db = get_db()
-    rows = db.execute(
-        'SELECT * FROM announcements WHERE is_active = 1 ORDER BY created_at DESC'
-    ).fetchall()
+    week_tag = request.args.get('week', '')
+    if week_tag:
+        rows = db.execute(
+            "SELECT * FROM announcements WHERE is_active = 1 AND (week_tag = ? OR week_tag = '') ORDER BY created_at DESC",
+            (week_tag,)
+        ).fetchall()
+    else:
+        rows = db.execute(
+            'SELECT * FROM announcements WHERE is_active = 1 ORDER BY created_at DESC'
+        ).fetchall()
     return jsonify([dict(r) for r in rows])
 
 @app.route('/api/announcements', methods=['POST'])
 @admin_required
 def create_announcement():
     data = request.get_json(silent=True) or {}
-    title = (data.get('title') or '').strip()
-    body  = (data.get('body') or '').strip()
-    color = data.get('color', 'maroon')
+    title    = (data.get('title') or '').strip()
+    body     = (data.get('body') or '').strip()
+    color    = data.get('color', 'maroon')
+    week_tag = (data.get('week_tag') or '').strip()
     if not title or not body:
         return jsonify({'error': 'Title and body required'}), 400
     db = get_db()
     cur = db.execute(
-        'INSERT INTO announcements (title, body, color) VALUES (?,?,?)', (title, body, color)
+        'INSERT INTO announcements (title, body, color, week_tag) VALUES (?,?,?,?)',
+        (title, body, color, week_tag)
     )
     db.commit()
     row = db.execute('SELECT * FROM announcements WHERE id = ?', (cur.lastrowid,)).fetchone()
@@ -349,12 +453,14 @@ def update_module(mod_id):
     row = db.execute('SELECT id FROM modules WHERE id = ?', (mod_id,)).fetchone()
     if not row:
         return jsonify({'error': 'Not found'}), 404
-    fields = {k: v for k, v in data.items() if k in ('title','description','progress','status','weeks')}
-    if not fields:
-        return jsonify({'error': 'No valid fields'}), 400
-    set_clause = ', '.join(f'{k} = ?' for k in fields)
-    db.execute(f'UPDATE modules SET {set_clause} WHERE id = ?', (*fields.values(), mod_id))
-    db.commit()
+    allowed = ('title', 'description', 'progress', 'status', 'weeks')
+    fields = {k: v for k, v in data.items() if k in allowed}
+    if fields:
+        fields['last_updated_at'] = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+        fields['last_updated_by'] = session.get('username', '')
+        set_clause = ', '.join(f'{k} = ?' for k in fields)
+        db.execute(f'UPDATE modules SET {set_clause} WHERE id = ?', (*fields.values(), mod_id))
+        db.commit()
     return jsonify({'ok': True})
 
 
@@ -406,6 +512,134 @@ def get_all_rsvps():
     return jsonify(by_event)
 
 
+# ── FINANCE API ──────────────────────────────────────────────────────────────
+
+@app.route('/api/finance')
+@login_required
+def get_finance():
+    db = get_db()
+    items = db.execute(
+        'SELECT * FROM finance_items ORDER BY order_index, id'
+    ).fetchall()
+    checked_rows = db.execute(
+        'SELECT item_id FROM student_finance_checks WHERE user_id = ?',
+        (session['user_id'],)
+    ).fetchall()
+    checked_ids = {r['item_id'] for r in checked_rows}
+    result = []
+    for item in items:
+        d = dict(item)
+        d['checked'] = item['id'] in checked_ids
+        result.append(d)
+    return jsonify(result)
+
+@app.route('/api/finance', methods=['POST'])
+@admin_required
+def create_finance_item():
+    data = request.get_json(silent=True) or {}
+    title       = (data.get('title') or '').strip()
+    description = data.get('description', '')
+    due_label   = data.get('due_label', '')
+    category    = data.get('category', 'document')
+    is_required = 1 if data.get('is_required', True) else 0
+    if not title:
+        return jsonify({'error': 'Title required'}), 400
+    db = get_db()
+    cur = db.execute(
+        'INSERT INTO finance_items (title, description, due_label, category, is_required) VALUES (?,?,?,?,?)',
+        (title, description, due_label, category, is_required)
+    )
+    db.commit()
+    row = db.execute('SELECT * FROM finance_items WHERE id = ?', (cur.lastrowid,)).fetchone()
+    return jsonify(dict(row)), 201
+
+@app.route('/api/finance/<int:item_id>', methods=['DELETE'])
+@admin_required
+def delete_finance_item(item_id):
+    db = get_db()
+    db.execute('DELETE FROM student_finance_checks WHERE item_id = ?', (item_id,))
+    db.execute('DELETE FROM finance_items WHERE id = ?', (item_id,))
+    db.commit()
+    return jsonify({'ok': True})
+
+@app.route('/api/finance/<int:item_id>/check', methods=['POST'])
+@login_required
+def toggle_finance_check(item_id):
+    db = get_db()
+    existing = db.execute(
+        'SELECT id FROM student_finance_checks WHERE user_id = ? AND item_id = ?',
+        (session['user_id'], item_id)
+    ).fetchone()
+    if existing:
+        db.execute('DELETE FROM student_finance_checks WHERE user_id = ? AND item_id = ?',
+                   (session['user_id'], item_id))
+        db.commit()
+        return jsonify({'checked': False})
+    else:
+        db.execute('INSERT INTO student_finance_checks (user_id, item_id) VALUES (?,?)',
+                   (session['user_id'], item_id))
+        db.commit()
+        return jsonify({'checked': True})
+
+@app.route('/api/finance/all-checks')
+@admin_required
+def get_all_finance_checks():
+    db = get_db()
+    rows = db.execute('''
+        SELECT fc.item_id, fc.user_id, u.display_name, fi.title
+        FROM student_finance_checks fc
+        JOIN users u ON u.id = fc.user_id
+        JOIN finance_items fi ON fi.id = fc.item_id
+        ORDER BY fi.order_index, u.display_name
+    ''').fetchall()
+    by_item = {}
+    for r in rows:
+        iid = r['item_id']
+        if iid not in by_item:
+            by_item[iid] = {'title': r['title'], 'students': []}
+        by_item[iid]['students'].append({'user_id': r['user_id'], 'name': r['display_name']})
+    return jsonify(by_item)
+
+
+# ── RESOURCES API ─────────────────────────────────────────────────────────────
+
+@app.route('/api/resources')
+@login_required
+def get_resources():
+    db = get_db()
+    rows = db.execute(
+        'SELECT * FROM resources WHERE is_active = 1 ORDER BY category, order_index, id'
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+@app.route('/api/resources', methods=['POST'])
+@admin_required
+def create_resource():
+    data = request.get_json(silent=True) or {}
+    title       = (data.get('title') or '').strip()
+    url         = (data.get('url') or '').strip()
+    description = data.get('description', '')
+    category    = data.get('category', 'general')
+    if not title:
+        return jsonify({'error': 'Title required'}), 400
+    db = get_db()
+    cur = db.execute(
+        'INSERT INTO resources (title, url, description, category) VALUES (?,?,?,?)',
+        (title, url, description, category)
+    )
+    db.commit()
+    row = db.execute('SELECT * FROM resources WHERE id = ?', (cur.lastrowid,)).fetchone()
+    return jsonify(dict(row)), 201
+
+@app.route('/api/resources/<int:res_id>', methods=['DELETE'])
+@admin_required
+def delete_resource(res_id):
+    db = get_db()
+    db.execute('UPDATE resources SET is_active = 0 WHERE id = ?', (res_id,))
+    db.commit()
+    return jsonify({'ok': True})
+
+
 # ── STUDENTS API ─────────────────────────────────────────────────────────────
 
 @app.route('/api/students')
@@ -448,13 +682,25 @@ def delete_student(student_id):
     db.commit()
     return jsonify({'ok': True})
 
+@app.route('/api/students/<int:student_id>/toggle-active', methods=['POST'])
+@admin_required
+def toggle_student_active(student_id):
+    db = get_db()
+    row = db.execute("SELECT is_active FROM users WHERE id = ? AND role = 'student'", (student_id,)).fetchone()
+    if not row:
+        return jsonify({'error': 'Not found'}), 404
+    new_state = 0 if row['is_active'] else 1
+    db.execute("UPDATE users SET is_active = ? WHERE id = ?", (new_state, student_id))
+    db.commit()
+    return jsonify({'is_active': new_state})
+
 @app.route('/api/students/import', methods=['POST'])
 @admin_required
 def import_students():
     if 'file' not in request.files:
         return jsonify({'error': 'No file uploaded'}), 400
     f = request.files['file']
-    content = f.read().decode('utf-8-sig')  # strip BOM if present
+    content = f.read().decode('utf-8-sig')
     reader = csv.DictReader(io.StringIO(content))
     db = get_db()
     added = 0
@@ -577,6 +823,7 @@ def delete_admin_user(user_id):
 
 if __name__ == '__main__':
     init_db()
+    migrate_db()
     import seed
     seed.run()
     port  = int(os.environ.get('PORT', 5000))
