@@ -217,15 +217,22 @@ def _event_to_dict(rec):
         'is_mandatory':   1 if d.get('Is Mandatory') else 0,
         'is_hidden':      1 if d.get('Is Hidden') else 0,
         'is_locked':      1 if d.get('Is Locked') else 0,
+        'is_staff_only':  1 if d.get('Is Staff Only') else 0,
     }
 
 
 @app.route('/api/events')
 @login_required
 def get_events():
+    is_staff = session.get('role') in ('admin', 'instructor', 'coordinator')
     course_filter = request.args.get('course', '')
+    base_formula = '' if is_staff else '{Is Staff Only}!=1'
     if course_filter:
-        formula = f"{{Course}}='{course_filter}'"
+        course_formula = f"{{Course}}='{course_filter}'"
+        formula = f"AND({base_formula},{course_formula})" if base_formula else course_formula
+    else:
+        formula = base_formula or None
+    if formula:
         recs = events_table.all(formula=formula, sort=['Date'])
     else:
         recs = events_table.all(sort=['Date'])
@@ -246,6 +253,7 @@ def create_event():
     course         = data.get('course', 'psc31180')
     if not title or not date_val:
         return jsonify({'error': 'Title and date required'}), 400
+    is_staff_only = bool(data.get('is_staff_only'))
     rec = events_table.create({
         'Title':          title,
         'Date':           date_val,
@@ -257,6 +265,7 @@ def create_event():
         'Course':         course,
         'Is Hidden':      False,
         'Is Locked':      False,
+        'Is Staff Only':  is_staff_only,
     })
     return jsonify(_event_to_dict(rec)), 201
 
@@ -280,12 +289,13 @@ def update_event(event_id):
         'course':         'Course',
         'is_hidden':      'Is Hidden',
         'is_locked':      'Is Locked',
+        'is_staff_only':  'Is Staff Only',
     }
     updates = {}
     for client_key, at_key in field_map.items():
         if client_key in data:
             val = data[client_key]
-            if client_key in ('is_mandatory', 'is_hidden', 'is_locked'):
+            if client_key in ('is_mandatory', 'is_hidden', 'is_locked', 'is_staff_only'):
                 val = bool(val)
             updates[at_key] = val
     if not updates:

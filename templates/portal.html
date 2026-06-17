@@ -593,9 +593,15 @@
           <label class="form-label">Eventbrite URL <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
           <input class="form-input" id="ev-eventbrite" type="url" placeholder="https://www.eventbrite.com/e/...">
         </div>
-        <div class="form-group" style="display:flex;align-items:center;gap:10px">
-          <input type="checkbox" id="ev-mandatory" style="width:16px;height:16px;accent-color:var(--maroon)">
-          <label for="ev-mandatory" class="form-label" style="margin:0;cursor:pointer">Mark as required / mandatory attendance</label>
+        <div style="display:flex;gap:2rem;flex-wrap:wrap">
+          <div class="form-group" style="display:flex;align-items:center;gap:10px;margin-bottom:0">
+            <input type="checkbox" id="ev-mandatory" style="width:16px;height:16px;accent-color:var(--maroon)">
+            <label for="ev-mandatory" class="form-label" style="margin:0;cursor:pointer">Required / mandatory attendance</label>
+          </div>
+          <div class="form-group" style="display:flex;align-items:center;gap:10px;margin-bottom:0">
+            <input type="checkbox" id="ev-staff-only" style="width:16px;height:16px;accent-color:#7B3D8F">
+            <label for="ev-staff-only" class="form-label" style="margin:0;cursor:pointer;color:#7B3D8F">Staff only (hidden from students)</label>
+          </div>
         </div>
         <button class="admin-btn-primary" onclick="adminAddEvent()">Add to calendar</button>
       </div>

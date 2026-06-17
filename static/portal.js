@@ -108,9 +108,10 @@ let dashWindow      = 'month'; // 'week' | 'month' | 'all'
 function transformEvent(e) {
   return {
     ...e,
-    hidden:    !!e.is_hidden,
-    locked:    !!e.is_locked,
-    mandatory: !!e.is_mandatory,
+    hidden:      !!e.is_hidden,
+    locked:      !!e.is_locked,
+    mandatory:   !!e.is_mandatory,
+    staffOnly:   !!e.is_staff_only,
   };
 }
 
@@ -412,6 +413,7 @@ function renderDashboard() {
         let daysLabel  = diffDays < 0 ? `${Math.abs(diffDays)}d ago` : diffDays === 0 ? 'Today' : `${diffDays}d away`;
         let daysClass  = diffDays <= 0 ? 'urgent' : diffDays <= 3 ? 'urgent' : diffDays <= 10 ? 'soon' : '';
         const mandatoryBadge = e.mandatory ? `<span class="badge-mandatory">Required</span>` : '';
+        const staffBadge     = e.staffOnly  ? `<span class="badge" style="background:#F3EAF8;color:#7B3D8F;font-size:10px">Staff only</span>` : '';
         return `<div class="deadline-timeline-item">
           <div class="dtl-date">
             <div class="dtl-date-num">${dy}</div>
@@ -423,7 +425,7 @@ function renderDashboard() {
           </div>
           <div class="dtl-card">
             <div class="dtl-eyebrow" style="color:${cat.color}">
-              ${cat.label}${cl ? `<span class="dtl-course-chip" style="background:${cc}18;color:${cc}">${cl}</span>` : ''}${mandatoryBadge}
+              ${cat.label}${cl ? `<span class="dtl-course-chip" style="background:${cc}18;color:${cc}">${cl}</span>` : ''}${mandatoryBadge}${staffBadge}
             </div>
             <div class="dtl-title">${e.title}</div>
             ${e.note ? `<div class="dtl-note">${e.note.slice(0,80)}${e.note.length>80?'…':''}</div>` : ''}
@@ -609,20 +611,22 @@ async function adminAddEvent() {
   const description    = document.getElementById('ev-description').value.trim();
   const eventbrite_url = document.getElementById('ev-eventbrite').value.trim();
   const is_mandatory   = document.getElementById('ev-mandatory').checked;
+  const is_staff_only  = document.getElementById('ev-staff-only').checked;
   const course         = document.getElementById('ev-course').value;
   if (!title || !date) return;
-  const res = await api('POST', '/api/events', { title, date, cat, note, description, eventbrite_url, is_mandatory, course });
+  const res = await api('POST', '/api/events', { title, date, cat, note, description, eventbrite_url, is_mandatory, is_staff_only, course });
   if (res.ok) {
     const data = await res.json();
     ALL_EVENTS.push(transformEvent(data));
     ALL_EVENTS.sort((a,b) => a.date.localeCompare(b.date));
     updateCourseEvents();
-    document.getElementById('ev-title').value       = '';
-    document.getElementById('ev-date').value        = '';
-    document.getElementById('ev-note').value        = '';
-    document.getElementById('ev-description').value = '';
-    document.getElementById('ev-eventbrite').value  = '';
-    document.getElementById('ev-mandatory').checked = false;
+    document.getElementById('ev-title').value          = '';
+    document.getElementById('ev-date').value           = '';
+    document.getElementById('ev-note').value           = '';
+    document.getElementById('ev-description').value    = '';
+    document.getElementById('ev-eventbrite').value     = '';
+    document.getElementById('ev-mandatory').checked    = false;
+    document.getElementById('ev-staff-only').checked   = false;
     renderCalendar();
     renderDashboard();
     renderAdminEvents(eventsFilter);
@@ -700,6 +704,7 @@ function renderAdminEvents(filter) {
         <div class="admin-list-title" style="${e.locked?'text-decoration:line-through':''}">
           ${e.title}
           ${e.mandatory ? `<span class="badge-mandatory" style="margin-left:6px">Required</span>` : ''}
+          ${e.staffOnly ? `<span class="badge" style="background:#F3EAF8;color:#7B3D8F;font-size:10px;margin-left:4px">Staff only</span>` : ''}
         </div>
         <div class="admin-list-meta">
           ${cat.label}
@@ -1539,7 +1544,8 @@ function renderDayBody(dateStr) {
       ${e.hidden ? `<span class="admin-status-chip" style="background:#333;color:#ccc;margin-right:4px">Hidden</span>` : ''}
       ${e.locked ? `<span class="admin-status-chip" style="background:#FAECE7;color:#D85A30;margin-right:4px">🔒 Locked</span>` : ''}
     ` : '';
-    const mandatoryBadge = e.mandatory ? `<span class="badge-mandatory" style="margin-left:4px">Required</span>` : '';
+    const mandatoryBadge = e.mandatory  ? `<span class="badge-mandatory" style="margin-left:4px">Required</span>` : '';
+    const staffOnlyBadge = e.staffOnly  ? `<span class="badge" style="background:#F3EAF8;color:#7B3D8F;font-size:10px;margin-left:4px">Staff only</span>` : '';
     const rsvpBtn = needsRsvp
       ? (e.locked
           ? `<span class="rsvp-btn" style="opacity:0.4;cursor:not-allowed;border-style:dashed;display:inline-block;margin-top:10px">🔒 Locked</span>`
@@ -1551,7 +1557,7 @@ function renderDayBody(dateStr) {
     return `<div class="panel-event-item" style="${e.hidden&&!isStudentMode?'opacity:0.6':''}">
       <div class="panel-event-accent" style="background:${e.locked?'#ccc':cat.color}"></div>
       <div class="panel-event-content">
-        <div class="panel-event-cat" style="color:${cat.color}">${cat.label}${cl?`<span class="course-badge" style="background:${cc}22;color:${cc}">${cl}</span>`:''}${mandatoryBadge}</div>
+        <div class="panel-event-cat" style="color:${cat.color}">${cat.label}${cl?`<span class="course-badge" style="background:${cc}22;color:${cc}">${cl}</span>`:''}${mandatoryBadge}${staffOnlyBadge}</div>
         <div class="panel-event-title">${e.title}</div>
         ${adminBadges}
         ${e.note ? `<div class="panel-event-note">${e.note}</div>` : ''}
