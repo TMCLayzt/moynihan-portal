@@ -1,13 +1,12 @@
 import os
 import csv
 import io
-import json
-import sqlite3
-from datetime import datetime, date, timedelta
+from datetime import datetime, timedelta
 from functools import wraps
 
 import bcrypt
-from flask import Flask, g, jsonify, render_template, request, session, Response
+from flask import Flask, jsonify, render_template, request, session, Response
+from pyairtable import Api
 
 app = Flask(__name__)
 
@@ -22,242 +21,50 @@ app.secret_key = _secret
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)
 app.config['SESSION_REFRESH_EACH_REQUEST'] = True
 
-DATABASE = os.environ.get('DATABASE_URL', 'portal.db')
 DEFAULT_PASSWORD = os.environ.get('DEFAULT_STUDENT_PASSWORD', 'moynihan2025')
+SETUP_KEY = os.environ.get('SETUP_KEY', 'moynihan-setup-2025')
+
+AIRTABLE_BASE_ID = os.environ.get('AIRTABLE_BASE_ID', 'appXXXXXXXXXXXXXX')
+
+# ── AIRTABLE CLIENT ───────────────────────────────────────────────────────────
+
+airtable = Api(os.environ.get('AIRTABLE_TOKEN'))
+
+users_table          = airtable.table(AIRTABLE_BASE_ID, 'tbl7gqQHD2AkunIAz')
+events_table         = airtable.table(AIRTABLE_BASE_ID, 'tbl3P7neAyuA5gT7w')
+announcements_table  = airtable.table(AIRTABLE_BASE_ID, 'tblXu9wY2ybY1NXEO')
+modules_table        = airtable.table(AIRTABLE_BASE_ID, 'tblAQkYdFqk0O2u9X')
+sessions_table       = airtable.table(AIRTABLE_BASE_ID, 'tbldnqBjclHKUMQ4X')
+deliverables_table   = airtable.table(AIRTABLE_BASE_ID, 'tbl4Dh3upHHURfuyp')
+readings_table       = airtable.table(AIRTABLE_BASE_ID, 'tblJe1jCoMm2Hra3q')
+rsvps_table          = airtable.table(AIRTABLE_BASE_ID, 'tblJuOVydDok5tgUK')
+finance_items_table  = airtable.table(AIRTABLE_BASE_ID, 'tblHj4IkpvsL7no8F')
+finance_checks_table = airtable.table(AIRTABLE_BASE_ID, 'tbl2rmHJBYWnjfTqk')
+resources_table      = airtable.table(AIRTABLE_BASE_ID, 'tblVBg7D1n1WvYN40')
+notes_table          = airtable.table(AIRTABLE_BASE_ID, 'tbltRpzpjwcfGwRGr')
 
 
-# ── DATABASE ─────────────────────────────────────────────────────────────────
+# ── HELPERS ───────────────────────────────────────────────────────────────────
 
-def get_db():
-    db = getattr(g, '_database', None)
-    if db is None:
-        db = g._database = sqlite3.connect(DATABASE)
-        db.row_factory = sqlite3.Row
-        db.execute('PRAGMA journal_mode=WAL')
-        db.execute('PRAGMA foreign_keys=ON')
-    return db
+def rec_to_dict(rec, id_field='id'):
+    """Return a record's fields dict with 'id' set to the Airtable record ID."""
+    d = dict(rec.get('fields', {}))
+    d[id_field] = rec['id']
+    return d
 
-@app.teardown_appcontext
-def close_db(exception):
-    db = getattr(g, '_database', None)
-    if db is not None:
-        db.close()
-
-def init_db():
-    db = sqlite3.connect(DATABASE)
-    db.executescript('''
-        CREATE TABLE IF NOT EXISTS users (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,
-            username      TEXT    UNIQUE NOT NULL,
-            email         TEXT    DEFAULT '',
-            display_name  TEXT    NOT NULL,
-            initials      TEXT    NOT NULL,
-            password_hash TEXT    NOT NULL,
-            role          TEXT    NOT NULL DEFAULT 'student',
-            course        TEXT    DEFAULT 'psc31180',
-            is_active     INTEGER NOT NULL DEFAULT 1,
-            created_at    TEXT    DEFAULT (datetime('now'))
-        );
-        CREATE TABLE IF NOT EXISTS events (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            title           TEXT    NOT NULL,
-            date            TEXT    NOT NULL,
-            cat             TEXT    NOT NULL DEFAULT 'lecture',
-            note            TEXT    DEFAULT '',
-            description     TEXT    DEFAULT '',
-            eventbrite_url  TEXT    DEFAULT '',
-            is_mandatory    INTEGER NOT NULL DEFAULT 0,
-            course          TEXT    NOT NULL DEFAULT 'psc31180',
-            is_hidden       INTEGER NOT NULL DEFAULT 0,
-            is_locked       INTEGER NOT NULL DEFAULT 0,
-            created_at      TEXT    DEFAULT (datetime('now'))
-        );
-        CREATE TABLE IF NOT EXISTS announcements (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            title      TEXT    NOT NULL,
-            body       TEXT    NOT NULL,
-            color      TEXT    NOT NULL DEFAULT 'maroon',
-            week_tag   TEXT    DEFAULT '',
-            is_active  INTEGER NOT NULL DEFAULT 1,
-            created_at TEXT    DEFAULT (datetime('now'))
-        );
-        CREATE TABLE IF NOT EXISTS modules (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            label           TEXT    NOT NULL,
-            title           TEXT    NOT NULL,
-            description     TEXT    DEFAULT '',
-            progress        INTEGER NOT NULL DEFAULT 0,
-            status          TEXT    NOT NULL DEFAULT 'Upcoming',
-            weeks           TEXT    DEFAULT '',
-            course          TEXT    NOT NULL,
-            order_index     INTEGER NOT NULL DEFAULT 0,
-            last_updated_at TEXT    DEFAULT NULL,
-            last_updated_by TEXT    DEFAULT ''
-        );
-        CREATE TABLE IF NOT EXISTS sessions (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            module_id   INTEGER NOT NULL,
-            date_label  TEXT    NOT NULL,
-            title       TEXT    NOT NULL,
-            note        TEXT    DEFAULT '',
-            is_joint    INTEGER NOT NULL DEFAULT 0,
-            order_index INTEGER NOT NULL DEFAULT 0,
-            FOREIGN KEY (module_id) REFERENCES modules(id)
-        );
-        CREATE TABLE IF NOT EXISTS deliverables (
-            id        INTEGER PRIMARY KEY AUTOINCREMENT,
-            module_id INTEGER NOT NULL,
-            title     TEXT    NOT NULL,
-            due_date  TEXT    NOT NULL,
-            cat       TEXT    NOT NULL DEFAULT 'homework',
-            note      TEXT    DEFAULT '',
-            FOREIGN KEY (module_id) REFERENCES modules(id)
-        );
-        CREATE TABLE IF NOT EXISTS readings (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            module_id   INTEGER NOT NULL,
-            title       TEXT    NOT NULL,
-            when_label  TEXT    NOT NULL,
-            type        TEXT    DEFAULT 'PDF',
-            description TEXT    DEFAULT '',
-            order_index INTEGER NOT NULL DEFAULT 0,
-            FOREIGN KEY (module_id) REFERENCES modules(id)
-        );
-        CREATE TABLE IF NOT EXISTS rsvps (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id    INTEGER NOT NULL,
-            event_id   INTEGER NOT NULL,
-            created_at TEXT    DEFAULT (datetime('now')),
-            UNIQUE (user_id, event_id),
-            FOREIGN KEY (user_id)  REFERENCES users(id),
-            FOREIGN KEY (event_id) REFERENCES events(id)
-        );
-        CREATE TABLE IF NOT EXISTS finance_items (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            title       TEXT    NOT NULL,
-            description TEXT    DEFAULT '',
-            due_label   TEXT    DEFAULT '',
-            category    TEXT    DEFAULT 'document',
-            is_required INTEGER NOT NULL DEFAULT 1,
-            order_index INTEGER NOT NULL DEFAULT 0,
-            created_at  TEXT    DEFAULT (datetime('now'))
-        );
-        CREATE TABLE IF NOT EXISTS student_finance_checks (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id    INTEGER NOT NULL,
-            item_id    INTEGER NOT NULL,
-            checked_at TEXT    DEFAULT (datetime('now')),
-            UNIQUE (user_id, item_id),
-            FOREIGN KEY (user_id) REFERENCES users(id),
-            FOREIGN KEY (item_id) REFERENCES finance_items(id)
-        );
-        CREATE TABLE IF NOT EXISTS resources (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            title       TEXT    NOT NULL,
-            url         TEXT    DEFAULT '',
-            description TEXT    DEFAULT '',
-            category    TEXT    DEFAULT 'general',
-            order_index INTEGER NOT NULL DEFAULT 0,
-            is_active   INTEGER NOT NULL DEFAULT 1,
-            created_at  TEXT    DEFAULT (datetime('now'))
-        );
-        CREATE TABLE IF NOT EXISTS form_requests (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            form_type   TEXT    NOT NULL,
-            student_id  INTEGER NOT NULL,
-            created_by  INTEGER NOT NULL,
-            status      TEXT    NOT NULL DEFAULT 'pending',
-            note        TEXT    DEFAULT '',
-            due_date    TEXT    DEFAULT '',
-            created_at  TEXT    DEFAULT (datetime('now')),
-            FOREIGN KEY (student_id)  REFERENCES users(id),
-            FOREIGN KEY (created_by)  REFERENCES users(id)
-        );
-        CREATE TABLE IF NOT EXISTS form_submissions (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            request_id   INTEGER NOT NULL UNIQUE,
-            fields       TEXT    NOT NULL,
-            signature    TEXT    NOT NULL,
-            submitted_at TEXT    DEFAULT (datetime('now')),
-            FOREIGN KEY (request_id) REFERENCES form_requests(id)
-        );
-        CREATE TABLE IF NOT EXISTS form_completions (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            request_id   INTEGER NOT NULL UNIQUE,
-            fields       TEXT    NOT NULL,
-            signature    TEXT    NOT NULL,
-            completed_by INTEGER NOT NULL,
-            completed_at TEXT    DEFAULT (datetime('now')),
-            FOREIGN KEY (request_id)  REFERENCES form_requests(id),
-            FOREIGN KEY (completed_by) REFERENCES users(id)
-        );
-    ''')
-    db.commit()
-    db.close()
-
-def migrate_db():
-    """Safely add new columns to existing tables (idempotent)."""
-    db = sqlite3.connect(DATABASE)
-    migrations = [
-        ('events',      'description',    "TEXT DEFAULT ''"),
-        ('events',      'eventbrite_url', "TEXT DEFAULT ''"),
-        ('events',      'is_mandatory',   'INTEGER NOT NULL DEFAULT 0'),
-        ('modules',     'last_updated_at','TEXT DEFAULT NULL'),
-        ('modules',     'last_updated_by',"TEXT DEFAULT ''"),
-        ('announcements','week_tag',      "TEXT DEFAULT ''"),
-    ]
-    for table, col, coldef in migrations:
-        try:
-            db.execute(f'ALTER TABLE {table} ADD COLUMN {col} {coldef}')
-        except Exception:
-            pass  # column already exists
-    db.executescript('''
-        CREATE TABLE IF NOT EXISTS student_notes (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            student_id      INTEGER NOT NULL,
-            body            TEXT    NOT NULL,
-            author_id       INTEGER NOT NULL,
-            author_initials TEXT    NOT NULL DEFAULT '',
-            author_name     TEXT    NOT NULL DEFAULT '',
-            created_at      TEXT    DEFAULT (datetime('now'))
-        );
-        CREATE TABLE IF NOT EXISTS form_requests (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            form_type   TEXT    NOT NULL,
-            student_id  INTEGER NOT NULL,
-            created_by  INTEGER NOT NULL,
-            status      TEXT    NOT NULL DEFAULT 'pending',
-            note        TEXT    DEFAULT '',
-            due_date    TEXT    DEFAULT '',
-            created_at  TEXT    DEFAULT (datetime('now'))
-        );
-        CREATE TABLE IF NOT EXISTS form_submissions (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            request_id   INTEGER NOT NULL UNIQUE,
-            fields       TEXT    NOT NULL,
-            signature    TEXT    NOT NULL,
-            submitted_at TEXT    DEFAULT (datetime('now'))
-        );
-        CREATE TABLE IF NOT EXISTS form_completions (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            request_id   INTEGER NOT NULL UNIQUE,
-            fields       TEXT    NOT NULL,
-            signature    TEXT    NOT NULL,
-            completed_by INTEGER NOT NULL,
-            completed_at TEXT    DEFAULT (datetime('now'))
-        );
-    ''')
-    db.commit()
-    db.close()
-
-
-# ── AUTH HELPERS ─────────────────────────────────────────────────────────────
 
 def hash_password(plain):
     return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
 
+
 def check_password(plain, hashed):
     return bcrypt.checkpw(plain.encode(), hashed.encode())
+
+
+def make_initials(name):
+    parts = name.strip().split()
+    return ''.join(p[0] for p in parts if p)[:2].upper()
+
 
 def login_required(f):
     @wraps(f)
@@ -267,14 +74,6 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated
 
-def can_access_course(student_course):
-    """True if the current admin has legitimate access to a student's course."""
-    my_course = session.get('course')
-    if session.get('role') == 'admin':
-        return True  # site admin sees everything
-    if not my_course or my_course == 'both':
-        return True
-    return student_course == my_course or student_course == 'both'
 
 def admin_required(f):
     @wraps(f)
@@ -286,9 +85,15 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
-def make_initials(name):
-    parts = name.strip().split()
-    return ''.join(p[0] for p in parts if p)[:2].upper()
+
+def can_access_course(student_course):
+    """True if the current admin has legitimate access to a student's course."""
+    my_course = session.get('course')
+    if session.get('role') == 'admin':
+        return True  # site admin sees everything
+    if not my_course or my_course == 'both':
+        return True
+    return student_course == my_course or student_course == 'both'
 
 
 # ── PAGES ────────────────────────────────────────────────────────────────────
@@ -296,6 +101,44 @@ def make_initials(name):
 @app.route('/')
 def index():
     return render_template('portal.html')
+
+
+# ── SEED API ─────────────────────────────────────────────────────────────────
+
+@app.route('/api/seed', methods=['POST'])
+def seed():
+    """Create default admin users. Protected by SETUP_KEY header or admin session."""
+    data = request.get_json(silent=True) or {}
+    setup_key = request.headers.get('X-Setup-Key', '') or data.get('setup_key', '')
+    is_admin_session = session.get('role') == 'admin'
+    if not is_admin_session and setup_key != SETUP_KEY:
+        return jsonify({'error': 'Forbidden — provide X-Setup-Key header or log in as admin'}), 403
+
+    defaults = [
+        {'username': 'admin',  'name': 'Admin User',      'password': 'admin2025',    'role': 'admin',       'course': 'both'},
+        {'username': 'layana', 'name': 'Layana Abu Touq', 'password': 'moynihan2025', 'role': 'coordinator', 'course': 'both'},
+        {'username': 'miller', 'name': 'Miller',          'password': 'tap2025',      'role': 'instructor',  'course': 'both'},
+    ]
+    created = []
+    skipped = []
+    for u in defaults:
+        existing = users_table.first(formula=f"{{Username}}='{u['username']}'")
+        if existing:
+            skipped.append(u['username'])
+            continue
+        initials = make_initials(u['name'])
+        users_table.create({
+            'Name': u['name'],
+            'Username': u['username'],
+            'Email': '',
+            'Password Hash': hash_password(u['password']),
+            'Role': u['role'],
+            'Course': u['course'],
+            'Initials': initials,
+            'Is Active': True,
+        })
+        created.append(u['username'])
+    return jsonify({'created': created, 'skipped': skipped}), 201
 
 
 # ── AUTH API ─────────────────────────────────────────────────────────────────
@@ -307,29 +150,34 @@ def login():
     password = data.get('password') or ''
     if not username or not password:
         return jsonify({'error': 'Username and password required'}), 400
-    db = get_db()
-    user = db.execute(
-        'SELECT * FROM users WHERE username = ? AND is_active = 1', (username,)
-    ).fetchone()
-    if not user or not check_password(password, user['password_hash']):
+
+    rec = users_table.first(formula=f"AND({{Username}}='{username}', {{Is Active}}=1)")
+    if not rec:
         return jsonify({'error': 'Incorrect username or password'}), 401
+    fields = rec['fields']
+    if not check_password(password, fields.get('Password Hash', '')):
+        return jsonify({'error': 'Incorrect username or password'}), 401
+
     session.permanent   = True
-    session['user_id']  = user['id']
-    session['username'] = user['username']
-    session['role']     = user['role']
-    session['course']   = user['course']
+    session['user_id']  = rec['id']
+    session['username'] = fields.get('Username', username)
+    session['role']     = fields.get('Role', 'student')
+    session['course']   = fields.get('Course', 'psc31180')
+    display_name = fields.get('Name', '')
     return jsonify({
-        'role':         user['role'],
-        'display':      user['display_name'],
-        'initials':     user['initials'],
-        'course':       user['course'],
-        'first_name':   user['display_name'].split()[0],
+        'role':       fields.get('Role', 'student'),
+        'display':    display_name,
+        'initials':   fields.get('Initials', make_initials(display_name)),
+        'course':     fields.get('Course', 'psc31180'),
+        'first_name': display_name.split()[0] if display_name else '',
     })
+
 
 @app.route('/api/logout', methods=['POST'])
 def logout():
     session.clear()
     return jsonify({'ok': True})
+
 
 @app.route('/api/change-password', methods=['POST'])
 @login_required
@@ -338,34 +186,51 @@ def change_password():
     current  = data.get('current', '')
     new_pass = data.get('new', '')
     confirm  = data.get('confirm', '')
-    db = get_db()
-    user = db.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
-    if not check_password(current, user['password_hash']):
+
+    rec = users_table.get(session['user_id'])
+    if not rec:
+        return jsonify({'error': 'User not found'}), 404
+    if not check_password(current, rec['fields'].get('Password Hash', '')):
         return jsonify({'error': 'Current password is incorrect'}), 400
     if len(new_pass) < 8:
         return jsonify({'error': 'New password must be at least 8 characters'}), 400
     if new_pass != confirm:
         return jsonify({'error': 'New passwords do not match'}), 400
-    db.execute('UPDATE users SET password_hash = ? WHERE id = ?',
-               (hash_password(new_pass), session['user_id']))
-    db.commit()
+    users_table.update(session['user_id'], {'Password Hash': hash_password(new_pass)})
     return jsonify({'ok': True})
 
 
 # ── EVENTS API ───────────────────────────────────────────────────────────────
 
+def _event_to_dict(rec):
+    d = rec_to_dict(rec)
+    # Normalize field names to match frontend expectations
+    return {
+        'id':             rec['id'],
+        'title':          d.get('Title', ''),
+        'date':           d.get('Date', ''),
+        'cat':            d.get('Category', 'lecture'),
+        'course':         d.get('Course', 'psc31180'),
+        'note':           d.get('Note', ''),
+        'description':    d.get('Description', ''),
+        'eventbrite_url': d.get('Eventbrite URL', ''),
+        'is_mandatory':   1 if d.get('Is Mandatory') else 0,
+        'is_hidden':      1 if d.get('Is Hidden') else 0,
+        'is_locked':      1 if d.get('Is Locked') else 0,
+    }
+
+
 @app.route('/api/events')
 @login_required
 def get_events():
-    db = get_db()
     course_filter = request.args.get('course', '')
     if course_filter:
-        rows = db.execute(
-            'SELECT * FROM events WHERE course = ? ORDER BY date', (course_filter,)
-        ).fetchall()
+        formula = f"{{Course}}='{course_filter}'"
+        recs = events_table.all(formula=formula, sort=['Date'])
     else:
-        rows = db.execute('SELECT * FROM events ORDER BY date').fetchall()
-    return jsonify([dict(r) for r in rows])
+        recs = events_table.all(sort=['Date'])
+    return jsonify([_event_to_dict(r) for r in recs])
+
 
 @app.route('/api/events', methods=['POST'])
 @admin_required
@@ -377,61 +242,81 @@ def create_event():
     note           = data.get('note', '')
     description    = data.get('description', '')
     eventbrite_url = data.get('eventbrite_url', '')
-    is_mandatory   = 1 if data.get('is_mandatory') else 0
+    is_mandatory   = bool(data.get('is_mandatory'))
     course         = data.get('course', 'psc31180')
     if not title or not date_val:
         return jsonify({'error': 'Title and date required'}), 400
-    db = get_db()
-    cur = db.execute(
-        'INSERT INTO events (title, date, cat, note, description, eventbrite_url, is_mandatory, course) VALUES (?,?,?,?,?,?,?,?)',
-        (title, date_val, cat, note, description, eventbrite_url, is_mandatory, course)
-    )
-    db.commit()
-    row = db.execute('SELECT * FROM events WHERE id = ?', (cur.lastrowid,)).fetchone()
-    return jsonify(dict(row)), 201
+    rec = events_table.create({
+        'Title':          title,
+        'Date':           date_val,
+        'Category':       cat,
+        'Note':           note,
+        'Description':    description,
+        'Eventbrite URL': eventbrite_url,
+        'Is Mandatory':   is_mandatory,
+        'Course':         course,
+        'Is Hidden':      False,
+        'Is Locked':      False,
+    })
+    return jsonify(_event_to_dict(rec)), 201
 
-@app.route('/api/events/<int:event_id>', methods=['PATCH'])
+
+@app.route('/api/events/<string:event_id>', methods=['PATCH'])
 @admin_required
 def update_event(event_id):
     data = request.get_json(silent=True) or {}
-    db = get_db()
-    row = db.execute('SELECT * FROM events WHERE id = ?', (event_id,)).fetchone()
-    if not row:
+    rec = events_table.get(event_id)
+    if not rec:
         return jsonify({'error': 'Not found'}), 404
-    allowed = ('title','date','cat','note','description','eventbrite_url',
-               'is_mandatory','course','is_hidden','is_locked')
-    fields = {k: v for k, v in data.items() if k in allowed}
-    if not fields:
-        return jsonify({'error': 'No valid fields'}), 400
-    set_clause = ', '.join(f'{k} = ?' for k in fields)
-    db.execute(f'UPDATE events SET {set_clause} WHERE id = ?', (*fields.values(), event_id))
-    db.commit()
-    row = db.execute('SELECT * FROM events WHERE id = ?', (event_id,)).fetchone()
-    return jsonify(dict(row))
 
-@app.route('/api/events/<int:event_id>', methods=['DELETE'])
+    field_map = {
+        'title':          'Title',
+        'date':           'Date',
+        'cat':            'Category',
+        'note':           'Note',
+        'description':    'Description',
+        'eventbrite_url': 'Eventbrite URL',
+        'is_mandatory':   'Is Mandatory',
+        'course':         'Course',
+        'is_hidden':      'Is Hidden',
+        'is_locked':      'Is Locked',
+    }
+    updates = {}
+    for client_key, at_key in field_map.items():
+        if client_key in data:
+            val = data[client_key]
+            if client_key in ('is_mandatory', 'is_hidden', 'is_locked'):
+                val = bool(val)
+            updates[at_key] = val
+    if not updates:
+        return jsonify({'error': 'No valid fields'}), 400
+    updated = events_table.update(event_id, updates)
+    return jsonify(_event_to_dict(updated))
+
+
+@app.route('/api/events/<string:event_id>', methods=['DELETE'])
 @admin_required
 def delete_event(event_id):
-    db = get_db()
-    db.execute('DELETE FROM rsvps WHERE event_id = ?', (event_id,))
-    db.execute('DELETE FROM events WHERE id = ?', (event_id,))
-    db.commit()
+    # Delete associated RSVPs first
+    rsvp_recs = rsvps_table.all(formula=f"FIND('{event_id}', ARRAYJOIN({{Event}}, ','))>0")
+    for r in rsvp_recs:
+        rsvps_table.delete(r['id'])
+    events_table.delete(event_id)
     return jsonify({'ok': True})
 
-@app.route('/api/events/<int:event_id>/ics')
+
+@app.route('/api/events/<string:event_id>/ics')
 @login_required
 def download_ics(event_id):
-    db = get_db()
-    ev = db.execute('SELECT * FROM events WHERE id = ?', (event_id,)).fetchone()
-    if not ev:
+    rec = events_table.get(event_id)
+    if not rec:
         return jsonify({'error': 'Not found'}), 404
-    ev = dict(ev)
-    # Build .ics content
-    dt = ev['date'].replace('-', '')  # YYYYMMDD
+    ev = rec['fields']
+    dt = (ev.get('Date') or '').replace('-', '')  # YYYYMMDD
     uid = f"event-{event_id}@moynihan-portal"
-    summary = ev['title'].replace(',', '\\,').replace(';', '\\;')
-    location = (ev.get('note') or '').split('·')[0].strip().replace(',', '\\,')
-    desc = (ev.get('description') or ev.get('note') or '').replace('\n', '\\n')
+    summary = (ev.get('Title') or '').replace(',', '\\,').replace(';', '\\;')
+    location = (ev.get('Note') or '').split('·')[0].strip().replace(',', '\\,')
+    desc = (ev.get('Description') or ev.get('Note') or '').replace('\n', '\\n')
     now_str = datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
     ics = f"""BEGIN:VCALENDAR
 VERSION:2.0
@@ -455,21 +340,29 @@ END:VCALENDAR"""
 
 # ── ANNOUNCEMENTS API ────────────────────────────────────────────────────────
 
+def _ann_to_dict(rec):
+    d = rec['fields']
+    return {
+        'id':         rec['id'],
+        'title':      d.get('Title', ''),
+        'body':       d.get('Body', ''),
+        'category':   d.get('Category', 'maroon'),
+        'week_tag':   d.get('Week Tag', ''),
+        'created_at': d.get('Created At', ''),
+    }
+
+
 @app.route('/api/announcements')
 @login_required
 def get_announcements():
-    db = get_db()
     week_tag = request.args.get('week', '')
     if week_tag:
-        rows = db.execute(
-            "SELECT * FROM announcements WHERE is_active = 1 AND (week_tag = ? OR week_tag = '') ORDER BY created_at DESC",
-            (week_tag,)
-        ).fetchall()
+        formula = f"OR({{Week Tag}}='{week_tag}', {{Week Tag}}='')"
+        recs = announcements_table.all(formula=formula, sort=[{'field': 'Created At', 'direction': 'desc'}])
     else:
-        rows = db.execute(
-            'SELECT * FROM announcements WHERE is_active = 1 ORDER BY created_at DESC'
-        ).fetchall()
-    return jsonify([dict(r) for r in rows])
+        recs = announcements_table.all(sort=[{'field': 'Created At', 'direction': 'desc'}])
+    return jsonify([_ann_to_dict(r) for r in recs])
+
 
 @app.route('/api/announcements', methods=['POST'])
 @admin_required
@@ -477,77 +370,145 @@ def create_announcement():
     data = request.get_json(silent=True) or {}
     title    = (data.get('title') or '').strip()
     body     = (data.get('body') or '').strip()
-    color    = data.get('color', 'maroon')
+    category = data.get('color', data.get('category', 'maroon'))
     week_tag = (data.get('week_tag') or '').strip()
     if not title or not body:
         return jsonify({'error': 'Title and body required'}), 400
-    db = get_db()
-    cur = db.execute(
-        'INSERT INTO announcements (title, body, color, week_tag) VALUES (?,?,?,?)',
-        (title, body, color, week_tag)
-    )
-    db.commit()
-    row = db.execute('SELECT * FROM announcements WHERE id = ?', (cur.lastrowid,)).fetchone()
-    return jsonify(dict(row)), 201
+    rec = announcements_table.create({
+        'Title':      title,
+        'Body':       body,
+        'Category':   category,
+        'Week Tag':   week_tag,
+        'Created At': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.000Z'),
+    })
+    return jsonify(_ann_to_dict(rec)), 201
 
-@app.route('/api/announcements/<int:ann_id>', methods=['DELETE'])
+
+@app.route('/api/announcements/<string:ann_id>', methods=['DELETE'])
 @admin_required
 def delete_announcement(ann_id):
-    db = get_db()
-    db.execute('UPDATE announcements SET is_active = 0 WHERE id = ?', (ann_id,))
-    db.commit()
+    announcements_table.delete(ann_id)
     return jsonify({'ok': True})
 
 
 # ── MODULES API ──────────────────────────────────────────────────────────────
 
+def _session_to_dict(rec):
+    d = rec['fields']
+    return {
+        'id':          rec['id'],
+        'module_id':   d.get('Module', [None])[0] if d.get('Module') else None,
+        'title':       d.get('Title', ''),
+        'date_label':  d.get('Date', ''),
+        'note':        d.get('Note', ''),
+        'is_joint':    1 if d.get('Type') == 'Joint' else 0,
+        'order_index': d.get('Order Index', 0),
+    }
+
+
+def _deliverable_to_dict(rec):
+    d = rec['fields']
+    return {
+        'id':          rec['id'],
+        'module_id':   d.get('Module', [None])[0] if d.get('Module') else None,
+        'title':       d.get('Title', ''),
+        'due_date':    d.get('Due Date', ''),
+        'cat':         d.get('Category', 'homework'),
+        'note':        d.get('Note', ''),
+        'order_index': d.get('Order Index', 0),
+    }
+
+
+def _reading_to_dict(rec):
+    d = rec['fields']
+    return {
+        'id':          rec['id'],
+        'module_id':   d.get('Module', [None])[0] if d.get('Module') else None,
+        'title':       d.get('Title', ''),
+        'when_label':  d.get('Author', ''),
+        'type':        'PDF',
+        'description': d.get('URL', d.get('Note', '')),
+        'order_index': d.get('Order Index', 0),
+    }
+
+
+def _module_to_dict(rec):
+    d = rec['fields']
+    return {
+        'id':             rec['id'],
+        'title':          d.get('Title', ''),
+        'label':          d.get('Title', ''),
+        'description':    d.get('Overview', ''),
+        'course':         d.get('Course', ''),
+        'order_index':    d.get('Order Index', 0),
+        'last_updated_at': d.get('Last Updated At', ''),
+        'last_updated_by': d.get('Last Updated By', ''),
+        'week_number':    d.get('Week Number', ''),
+    }
+
+
 @app.route('/api/modules')
 @login_required
 def get_modules():
-    db = get_db()
     course_filter = request.args.get('course', '')
     if course_filter:
-        mods = db.execute(
-            'SELECT * FROM modules WHERE course = ? ORDER BY order_index', (course_filter,)
-        ).fetchall()
+        mods = modules_table.all(formula=f"{{Course}}='{course_filter}'", sort=['Order Index'])
     else:
-        mods = db.execute('SELECT * FROM modules ORDER BY course, order_index').fetchall()
+        mods = modules_table.all(sort=['Order Index'])
+
+    # Fetch all child records in bulk
+    all_sessions     = sessions_table.all(sort=['Order Index'])
+    all_deliverables = deliverables_table.all()
+    all_readings     = readings_table.all(sort=['Order Index'])
+
     result = []
     for m in mods:
         mid = m['id']
-        sess = db.execute(
-            'SELECT * FROM sessions WHERE module_id = ? ORDER BY order_index', (mid,)
-        ).fetchall()
-        deliv = db.execute(
-            'SELECT * FROM deliverables WHERE module_id = ?', (mid,)
-        ).fetchall()
-        reads = db.execute(
-            'SELECT * FROM readings WHERE module_id = ? ORDER BY order_index', (mid,)
-        ).fetchall()
-        result.append({
-            **dict(m),
-            'sessions':     [dict(s) for s in sess],
-            'deliverables': [dict(d) for d in deliv],
-            'readings':     [dict(r) for r in reads],
-        })
+        mod_dict = _module_to_dict(m)
+
+        mod_sessions = [
+            _session_to_dict(s) for s in all_sessions
+            if mid in (s['fields'].get('Module') or [])
+        ]
+        mod_deliverables = [
+            _deliverable_to_dict(d) for d in all_deliverables
+            if mid in (d['fields'].get('Module') or [])
+        ]
+        mod_readings = [
+            _reading_to_dict(r) for r in all_readings
+            if mid in (r['fields'].get('Module') or [])
+        ]
+
+        mod_dict['sessions']     = mod_sessions
+        mod_dict['deliverables'] = mod_deliverables
+        mod_dict['readings']     = mod_readings
+        result.append(mod_dict)
+
     return jsonify(result)
 
-@app.route('/api/modules/<int:mod_id>', methods=['PATCH'])
+
+@app.route('/api/modules/<string:mod_id>', methods=['PATCH'])
 @admin_required
 def update_module(mod_id):
     data = request.get_json(silent=True) or {}
-    db = get_db()
-    row = db.execute('SELECT id FROM modules WHERE id = ?', (mod_id,)).fetchone()
-    if not row:
+    rec = modules_table.get(mod_id)
+    if not rec:
         return jsonify({'error': 'Not found'}), 404
-    allowed = ('title', 'description', 'progress', 'status', 'weeks')
-    fields = {k: v for k, v in data.items() if k in allowed}
-    if fields:
-        fields['last_updated_at'] = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-        fields['last_updated_by'] = session.get('username', '')
-        set_clause = ', '.join(f'{k} = ?' for k in fields)
-        db.execute(f'UPDATE modules SET {set_clause} WHERE id = ?', (*fields.values(), mod_id))
-        db.commit()
+
+    field_map = {
+        'title':       'Title',
+        'description': 'Overview',
+        'weeks':       'Week Number',
+    }
+    updates = {}
+    for client_key, at_key in field_map.items():
+        if client_key in data:
+            updates[at_key] = data[client_key]
+
+    if updates:
+        updates['Last Updated At'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.000Z')
+        updates['Last Updated By'] = session.get('username', '')
+        modules_table.update(mod_id, updates)
     return jsonify({'ok': True})
 
 
@@ -556,78 +517,119 @@ def update_module(mod_id):
 @app.route('/api/rsvps')
 @login_required
 def get_rsvps():
-    db = get_db()
-    rows = db.execute(
-        'SELECT event_id FROM rsvps WHERE user_id = ?', (session['user_id'],)
-    ).fetchall()
-    return jsonify([r['event_id'] for r in rows])
+    uid = session['user_id']
+    recs = rsvps_table.all(formula=f"FIND('{uid}', ARRAYJOIN({{User}}, ','))>0")
+    event_ids = []
+    for r in recs:
+        event_list = r['fields'].get('Event') or []
+        if event_list:
+            event_ids.append(event_list[0])
+    return jsonify(event_ids)
 
-@app.route('/api/rsvps/<int:event_id>', methods=['POST'])
+
+@app.route('/api/rsvps/<string:event_id>', methods=['POST'])
 @login_required
 def toggle_rsvp(event_id):
-    db = get_db()
-    existing = db.execute(
-        'SELECT id FROM rsvps WHERE user_id = ? AND event_id = ?',
-        (session['user_id'], event_id)
-    ).fetchone()
+    uid = session['user_id']
+    key = f"{uid}_{event_id}"
+    existing = rsvps_table.first(formula=f"{{Key}}='{key}'")
     if existing:
-        db.execute('DELETE FROM rsvps WHERE user_id = ? AND event_id = ?',
-                   (session['user_id'], event_id))
-        db.commit()
+        rsvps_table.delete(existing['id'])
         return jsonify({'rsvpd': False})
     else:
-        db.execute('INSERT INTO rsvps (user_id, event_id) VALUES (?,?)',
-                   (session['user_id'], event_id))
-        db.commit()
+        rsvps_table.create({
+            'Key':        key,
+            'User':       [uid],
+            'Event':      [event_id],
+            'Created At': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.000Z'),
+        })
         return jsonify({'rsvpd': True})
+
 
 @app.route('/api/rsvps/all')
 @admin_required
 def get_all_rsvps():
-    db = get_db()
     my_course = session.get('course')
+    all_rsvps = rsvps_table.all()
+
+    # Build a lookup of user record IDs -> user info
     if session.get('role') == 'admin' or not my_course or my_course == 'both':
-        rows = db.execute('''
-            SELECT r.event_id, r.user_id, u.display_name, u.email
-            FROM rsvps r JOIN users u ON u.id = r.user_id
-            ORDER BY r.event_id
-        ''').fetchall()
+        user_recs = users_table.all(formula="OR({Role}='student', {Role}='student')")
+        # Actually fetch all users to build lookup
+        user_recs = users_table.all()
     else:
-        rows = db.execute('''
-            SELECT r.event_id, r.user_id, u.display_name, u.email
-            FROM rsvps r JOIN users u ON u.id = r.user_id
-            WHERE u.course = ? OR u.course = 'both'
-            ORDER BY r.event_id
-        ''', (my_course,)).fetchall()
+        user_recs = users_table.all(
+            formula=f"OR({{Course}}='{my_course}', {{Course}}='both')"
+        )
+
+    user_lookup = {}
+    for u in user_recs:
+        user_lookup[u['id']] = {
+            'name':  u['fields'].get('Name', ''),
+            'email': u['fields'].get('Email', ''),
+            'course': u['fields'].get('Course', ''),
+        }
+
     by_event = {}
-    for r in rows:
-        eid = r['event_id']
-        if eid not in by_event:
-            by_event[eid] = []
-        by_event[eid].append({'user_id': r['user_id'], 'name': r['display_name'], 'email': r['email']})
+    for r in all_rsvps:
+        f = r['fields']
+        user_list  = f.get('User') or []
+        event_list = f.get('Event') or []
+        if not user_list or not event_list:
+            continue
+        user_rec_id  = user_list[0]
+        event_rec_id = event_list[0]
+        user_info = user_lookup.get(user_rec_id)
+        if not user_info:
+            continue
+        # Apply course filter for non-global admins
+        if session.get('role') != 'admin' and my_course and my_course != 'both':
+            if user_info['course'] not in (my_course, 'both'):
+                continue
+        if event_rec_id not in by_event:
+            by_event[event_rec_id] = []
+        by_event[event_rec_id].append({
+            'user_id': user_rec_id,
+            'name':    user_info['name'],
+            'email':   user_info['email'],
+        })
     return jsonify(by_event)
 
 
 # ── FINANCE API ──────────────────────────────────────────────────────────────
 
+def _finance_item_to_dict(rec):
+    d = rec['fields']
+    return {
+        'id':          rec['id'],
+        'title':       d.get('Title', ''),
+        'description': d.get('Description', ''),
+        'is_required': 1 if d.get('Is Required') else 0,
+        'order_index': d.get('Order Index', 0),
+    }
+
+
 @app.route('/api/finance')
 @login_required
 def get_finance():
-    db = get_db()
-    items = db.execute(
-        'SELECT * FROM finance_items ORDER BY order_index, id'
-    ).fetchall()
-    checked_rows = db.execute(
-        'SELECT item_id FROM student_finance_checks WHERE user_id = ?',
-        (session['user_id'],)
-    ).fetchall()
-    checked_ids = {r['item_id'] for r in checked_rows}
+    uid = session['user_id']
+    items = finance_items_table.all(sort=['Order Index'])
+    checks = finance_checks_table.all(
+        formula=f"FIND('{uid}', ARRAYJOIN({{User}}, ','))>0"
+    )
+    checked_item_ids = set()
+    for c in checks:
+        item_list = c['fields'].get('Finance Item') or []
+        if item_list:
+            checked_item_ids.add(item_list[0])
+
     result = []
     for item in items:
-        d = dict(item)
-        d['checked'] = item['id'] in checked_ids
+        d = _finance_item_to_dict(item)
+        d['checked'] = item['id'] in checked_item_ids
         result.append(d)
     return jsonify(result)
+
 
 @app.route('/api/finance', methods=['POST'])
 @admin_required
@@ -635,89 +637,117 @@ def create_finance_item():
     data = request.get_json(silent=True) or {}
     title       = (data.get('title') or '').strip()
     description = data.get('description', '')
-    due_label   = data.get('due_label', '')
-    category    = data.get('category', 'document')
-    is_required = 1 if data.get('is_required', True) else 0
+    is_required = bool(data.get('is_required', True))
     if not title:
         return jsonify({'error': 'Title required'}), 400
-    db = get_db()
-    cur = db.execute(
-        'INSERT INTO finance_items (title, description, due_label, category, is_required) VALUES (?,?,?,?,?)',
-        (title, description, due_label, category, is_required)
-    )
-    db.commit()
-    row = db.execute('SELECT * FROM finance_items WHERE id = ?', (cur.lastrowid,)).fetchone()
-    return jsonify(dict(row)), 201
+    rec = finance_items_table.create({
+        'Title':       title,
+        'Description': description,
+        'Is Required': is_required,
+    })
+    return jsonify(_finance_item_to_dict(rec)), 201
 
-@app.route('/api/finance/<int:item_id>', methods=['DELETE'])
+
+@app.route('/api/finance/<string:item_id>', methods=['DELETE'])
 @admin_required
 def delete_finance_item(item_id):
-    db = get_db()
-    db.execute('DELETE FROM student_finance_checks WHERE item_id = ?', (item_id,))
-    db.execute('DELETE FROM finance_items WHERE id = ?', (item_id,))
-    db.commit()
+    # Delete associated checks first
+    check_recs = finance_checks_table.all(
+        formula=f"FIND('{item_id}', ARRAYJOIN({{Finance Item}}, ','))>0"
+    )
+    for c in check_recs:
+        finance_checks_table.delete(c['id'])
+    finance_items_table.delete(item_id)
     return jsonify({'ok': True})
 
-@app.route('/api/finance/<int:item_id>/check', methods=['POST'])
+
+@app.route('/api/finance/<string:item_id>/check', methods=['POST'])
 @login_required
 def toggle_finance_check(item_id):
-    db = get_db()
-    existing = db.execute(
-        'SELECT id FROM student_finance_checks WHERE user_id = ? AND item_id = ?',
-        (session['user_id'], item_id)
-    ).fetchone()
+    uid = session['user_id']
+    key = f"{uid}_{item_id}"
+    existing = finance_checks_table.first(formula=f"{{Key}}='{key}'")
     if existing:
-        db.execute('DELETE FROM student_finance_checks WHERE user_id = ? AND item_id = ?',
-                   (session['user_id'], item_id))
-        db.commit()
+        finance_checks_table.delete(existing['id'])
         return jsonify({'checked': False})
     else:
-        db.execute('INSERT INTO student_finance_checks (user_id, item_id) VALUES (?,?)',
-                   (session['user_id'], item_id))
-        db.commit()
+        finance_checks_table.create({
+            'Key':          key,
+            'User':         [uid],
+            'Finance Item': [item_id],
+            'Checked At':   datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.000Z'),
+        })
         return jsonify({'checked': True})
+
 
 @app.route('/api/finance/all-checks')
 @admin_required
 def get_all_finance_checks():
-    db = get_db()
     my_course = session.get('course')
+    all_checks = finance_checks_table.all()
+    all_items  = finance_items_table.all(sort=['Order Index'])
+
     if session.get('role') == 'admin' or not my_course or my_course == 'both':
-        rows = db.execute('''
-            SELECT fc.item_id, fc.user_id, u.display_name, fi.title
-            FROM student_finance_checks fc
-            JOIN users u ON u.id = fc.user_id
-            JOIN finance_items fi ON fi.id = fc.item_id
-            ORDER BY fi.order_index, u.display_name
-        ''').fetchall()
+        user_recs = users_table.all()
     else:
-        rows = db.execute('''
-            SELECT fc.item_id, fc.user_id, u.display_name, fi.title
-            FROM student_finance_checks fc
-            JOIN users u ON u.id = fc.user_id
-            JOIN finance_items fi ON fi.id = fc.item_id
-            WHERE u.course = ? OR u.course = 'both'
-            ORDER BY fi.order_index, u.display_name
-        ''', (my_course,)).fetchall()
+        user_recs = users_table.all(
+            formula=f"OR({{Course}}='{my_course}', {{Course}}='both')"
+        )
+
+    user_lookup = {u['id']: u['fields'] for u in user_recs}
+    item_lookup = {i['id']: i['fields'].get('Title', '') for i in all_items}
+
     by_item = {}
-    for r in rows:
-        iid = r['item_id']
-        if iid not in by_item:
-            by_item[iid] = {'title': r['title'], 'students': []}
-        by_item[iid]['students'].append({'user_id': r['user_id'], 'name': r['display_name']})
+    for c in all_checks:
+        f = c['fields']
+        user_list = f.get('User') or []
+        item_list = f.get('Finance Item') or []
+        if not user_list or not item_list:
+            continue
+        user_rec_id = user_list[0]
+        item_rec_id = item_list[0]
+        user_info = user_lookup.get(user_rec_id)
+        if not user_info:
+            continue
+        if session.get('role') != 'admin' and my_course and my_course != 'both':
+            if user_info.get('Course') not in (my_course, 'both'):
+                continue
+        if item_rec_id not in by_item:
+            by_item[item_rec_id] = {
+                'title':    item_lookup.get(item_rec_id, ''),
+                'students': [],
+            }
+        by_item[item_rec_id]['students'].append({
+            'user_id': user_rec_id,
+            'name':    user_info.get('Name', ''),
+        })
     return jsonify(by_item)
 
 
 # ── RESOURCES API ─────────────────────────────────────────────────────────────
 
+def _resource_to_dict(rec):
+    d = rec['fields']
+    return {
+        'id':          rec['id'],
+        'title':       d.get('Title', ''),
+        'url':         d.get('URL', ''),
+        'description': d.get('Description', ''),
+        'category':    d.get('Category', 'general'),
+        'is_active':   1 if d.get('Is Active') else 0,
+        'order_index': d.get('Order Index', 0),
+    }
+
+
 @app.route('/api/resources')
 @login_required
 def get_resources():
-    db = get_db()
-    rows = db.execute(
-        'SELECT * FROM resources WHERE is_active = 1 ORDER BY category, order_index, id'
-    ).fetchall()
-    return jsonify([dict(r) for r in rows])
+    recs = resources_table.all(
+        formula='{Is Active}=1',
+        sort=['Category', 'Order Index']
+    )
+    return jsonify([_resource_to_dict(r) for r in recs])
+
 
 @app.route('/api/resources', methods=['POST'])
 @admin_required
@@ -729,41 +759,48 @@ def create_resource():
     category    = data.get('category', 'general')
     if not title:
         return jsonify({'error': 'Title required'}), 400
-    db = get_db()
-    cur = db.execute(
-        'INSERT INTO resources (title, url, description, category) VALUES (?,?,?,?)',
-        (title, url, description, category)
-    )
-    db.commit()
-    row = db.execute('SELECT * FROM resources WHERE id = ?', (cur.lastrowid,)).fetchone()
-    return jsonify(dict(row)), 201
+    rec = resources_table.create({
+        'Title':       title,
+        'URL':         url,
+        'Description': description,
+        'Category':    category,
+        'Is Active':   True,
+    })
+    return jsonify(_resource_to_dict(rec)), 201
 
-@app.route('/api/resources/<int:res_id>', methods=['DELETE'])
+
+@app.route('/api/resources/<string:res_id>', methods=['DELETE'])
 @admin_required
 def delete_resource(res_id):
-    db = get_db()
-    db.execute('UPDATE resources SET is_active = 0 WHERE id = ?', (res_id,))
-    db.commit()
+    resources_table.update(res_id, {'Is Active': False})
     return jsonify({'ok': True})
 
 
 # ── STUDENTS API ─────────────────────────────────────────────────────────────
 
+def _student_to_dict(rec):
+    d = rec['fields']
+    return {
+        'id':           rec['id'],
+        'username':     d.get('Username', ''),
+        'email':        d.get('Email', ''),
+        'display_name': d.get('Name', ''),
+        'course':       d.get('Course', 'psc31180'),
+        'is_active':    1 if d.get('Is Active') else 0,
+    }
+
+
 @app.route('/api/students')
 @admin_required
 def get_students():
-    db = get_db()
     my_course = session.get('course')
     if session.get('role') == 'admin' or not my_course or my_course == 'both':
-        rows = db.execute(
-            "SELECT id, username, email, display_name, course, is_active FROM users WHERE role = 'student' ORDER BY display_name"
-        ).fetchall()
+        recs = users_table.all(formula="{Role}='student'", sort=['Name'])
     else:
-        rows = db.execute(
-            "SELECT id, username, email, display_name, course, is_active FROM users WHERE role = 'student' AND (course = ? OR course = 'both') ORDER BY display_name",
-            (my_course,)
-        ).fetchall()
-    return jsonify([dict(r) for r in rows])
+        formula = f"AND({{Role}}='student', OR({{Course}}='{my_course}', {{Course}}='both'))"
+        recs = users_table.all(formula=formula, sort=['Name'])
+    return jsonify([_student_to_dict(r) for r in recs])
+
 
 @app.route('/api/students', methods=['POST'])
 @admin_required
@@ -775,38 +812,45 @@ def create_student():
     if not name or not email:
         return jsonify({'error': 'Name and email required'}), 400
     username = email.split('@')[0].lower().replace('.', '').replace(' ', '')
-    db = get_db()
-    if db.execute('SELECT id FROM users WHERE username = ?', (username,)).fetchone():
+    existing = users_table.first(formula=f"{{Username}}='{username}'")
+    if existing:
         return jsonify({'error': f'Username "{username}" already exists'}), 409
     initials = make_initials(name)
     pw_hash  = hash_password(DEFAULT_PASSWORD)
-    cur = db.execute(
-        'INSERT INTO users (username, email, display_name, initials, password_hash, role, course) VALUES (?,?,?,?,?,?,?)',
-        (username, email, name, initials, pw_hash, 'student', course)
-    )
-    db.commit()
-    row = db.execute("SELECT id, username, email, display_name, course, is_active FROM users WHERE id = ?", (cur.lastrowid,)).fetchone()
-    return jsonify(dict(row)), 201
+    rec = users_table.create({
+        'Name':          name,
+        'Username':      username,
+        'Email':         email,
+        'Password Hash': pw_hash,
+        'Role':          'student',
+        'Course':        course,
+        'Initials':      initials,
+        'Is Active':     True,
+    })
+    return jsonify(_student_to_dict(rec)), 201
 
-@app.route('/api/students/<int:student_id>', methods=['DELETE'])
+
+@app.route('/api/students/<string:student_id>', methods=['DELETE'])
 @admin_required
 def delete_student(student_id):
-    db = get_db()
-    db.execute("DELETE FROM users WHERE id = ? AND role = 'student'", (student_id,))
-    db.commit()
+    rec = users_table.get(student_id)
+    if not rec or rec['fields'].get('Role') != 'student':
+        return jsonify({'error': 'Not found'}), 404
+    users_table.delete(student_id)
     return jsonify({'ok': True})
 
-@app.route('/api/students/<int:student_id>/toggle-active', methods=['POST'])
+
+@app.route('/api/students/<string:student_id>/toggle-active', methods=['POST'])
 @admin_required
 def toggle_student_active(student_id):
-    db = get_db()
-    row = db.execute("SELECT is_active FROM users WHERE id = ? AND role = 'student'", (student_id,)).fetchone()
-    if not row:
+    rec = users_table.get(student_id)
+    if not rec or rec['fields'].get('Role') != 'student':
         return jsonify({'error': 'Not found'}), 404
-    new_state = 0 if row['is_active'] else 1
-    db.execute("UPDATE users SET is_active = ? WHERE id = ?", (new_state, student_id))
-    db.commit()
-    return jsonify({'is_active': new_state})
+    current = rec['fields'].get('Is Active', False)
+    new_state = not current
+    users_table.update(student_id, {'Is Active': new_state})
+    return jsonify({'is_active': 1 if new_state else 0})
+
 
 @app.route('/api/students/import', methods=['POST'])
 @admin_required
@@ -815,11 +859,10 @@ def import_students():
         return jsonify({'error': 'No file uploaded'}), 400
     f = request.files['file']
     content = f.read().decode('utf-8-sig')
-    reader = csv.DictReader(io.StringIO(content))
-    db = get_db()
-    added = 0
+    reader  = csv.DictReader(io.StringIO(content))
+    added   = 0
     skipped = 0
-    errors = []
+    errors  = []
     pw_hash = hash_password(DEFAULT_PASSWORD)
     for i, row in enumerate(reader, start=2):
         name   = (row.get('name') or row.get('Name') or '').strip()
@@ -831,98 +874,125 @@ def import_students():
         if course not in ('psc31180', 'psc31330'):
             course = 'psc31180'
         username = email.split('@')[0].lower().replace('.', '').replace(' ', '')
-        if db.execute('SELECT id FROM users WHERE username = ?', (username,)).fetchone():
+        existing = users_table.first(formula=f"{{Username}}='{username}'")
+        if existing:
             skipped += 1
             continue
         initials = make_initials(name)
-        db.execute(
-            'INSERT INTO users (username, email, display_name, initials, password_hash, role, course) VALUES (?,?,?,?,?,?,?)',
-            (username, email, name, initials, pw_hash, 'student', course)
-        )
+        users_table.create({
+            'Name':          name,
+            'Username':      username,
+            'Email':         email,
+            'Password Hash': pw_hash,
+            'Role':          'student',
+            'Course':        course,
+            'Initials':      initials,
+            'Is Active':     True,
+        })
         added += 1
-    db.commit()
     return jsonify({'added': added, 'skipped': skipped, 'errors': errors})
 
-@app.route('/api/students/<int:student_id>/reset-password', methods=['POST'])
+
+@app.route('/api/students/<string:student_id>/reset-password', methods=['POST'])
 @admin_required
 def reset_student_password(student_id):
-    db = get_db()
-    student = db.execute("SELECT course FROM users WHERE id = ? AND role = 'student'", (student_id,)).fetchone()
-    if not student:
+    rec = users_table.get(student_id)
+    if not rec or rec['fields'].get('Role') != 'student':
         return jsonify({'error': 'Student not found'}), 404
-    if not can_access_course(student['course']):
+    student_course = rec['fields'].get('Course', '')
+    if not can_access_course(student_course):
         return jsonify({'error': 'Forbidden — student is not in your course'}), 403
     data = request.get_json(silent=True) or {}
     new_pass = (data.get('password') or DEFAULT_PASSWORD).strip()
     if len(new_pass) < 6:
         return jsonify({'error': 'Password too short'}), 400
-    db.execute("UPDATE users SET password_hash = ? WHERE id = ? AND role = 'student'",
-               (hash_password(new_pass), student_id))
-    db.commit()
+    users_table.update(student_id, {'Password Hash': hash_password(new_pass)})
     return jsonify({'ok': True})
 
 
 # ── STUDENT NOTES API ────────────────────────────────────────────────────────
 
-@app.route('/api/students/<int:student_id>/notes')
+def _note_to_dict(rec):
+    d = rec['fields']
+    return {
+        'id':              rec['id'],
+        'body':            d.get('Body', ''),
+        'author_initials': d.get('Author Initials', ''),
+        'author_name':     d.get('Author Name', ''),
+        'created_at':      d.get('Created At', ''),
+    }
+
+
+@app.route('/api/students/<string:student_id>/notes')
 @admin_required
 def get_student_notes(student_id):
-    db = get_db()
-    rows = db.execute(
-        'SELECT id, body, author_initials, author_name, created_at FROM student_notes WHERE student_id = ? ORDER BY created_at DESC',
-        (student_id,)
-    ).fetchall()
-    return jsonify([dict(r) for r in rows])
+    recs = notes_table.all(
+        formula=f"FIND('{student_id}', ARRAYJOIN({{Student}}, ','))>0",
+        sort=[{'field': 'Created At', 'direction': 'desc'}]
+    )
+    return jsonify([_note_to_dict(r) for r in recs])
 
-@app.route('/api/students/<int:student_id>/notes', methods=['POST'])
+
+@app.route('/api/students/<string:student_id>/notes', methods=['POST'])
 @admin_required
 def add_student_note(student_id):
     data = request.get_json(silent=True) or {}
     body = (data.get('body') or '').strip()
     if not body:
         return jsonify({'error': 'Note body required'}), 400
-    author_id = session['user_id']
-    db = get_db()
-    author = db.execute('SELECT display_name, initials FROM users WHERE id = ?', (author_id,)).fetchone()
-    author_initials = author['initials'] if author and author['initials'] else ''
-    author_name = author['display_name'] if author else ''
-    cur = db.execute(
-        'INSERT INTO student_notes (student_id, body, author_id, author_initials, author_name) VALUES (?,?,?,?,?)',
-        (student_id, body, author_id, author_initials, author_name)
-    )
-    db.commit()
-    row = db.execute('SELECT id, body, author_initials, author_name, created_at FROM student_notes WHERE id = ?', (cur.lastrowid,)).fetchone()
-    return jsonify(dict(row)), 201
+    author_rec = users_table.get(session['user_id'])
+    if author_rec:
+        author_fields    = author_rec['fields']
+        author_initials  = author_fields.get('Initials', '')
+        author_name      = author_fields.get('Name', '')
+    else:
+        author_initials = ''
+        author_name     = ''
+    rec = notes_table.create({
+        'Body':            body,
+        'Student':         [student_id],
+        'Author Name':     author_name,
+        'Author Initials': author_initials,
+        'Created At':      datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.000Z'),
+    })
+    return jsonify(_note_to_dict(rec)), 201
 
-@app.route('/api/student-notes/<int:note_id>', methods=['DELETE'])
+
+@app.route('/api/student-notes/<string:note_id>', methods=['DELETE'])
 @admin_required
 def delete_student_note(note_id):
-    db = get_db()
-    db.execute('DELETE FROM student_notes WHERE id = ?', (note_id,))
-    db.commit()
+    notes_table.delete(note_id)
     return jsonify({'ok': True})
 
 
 # ── ADMIN USERS API ──────────────────────────────────────────────────────────
 
+def _admin_user_to_dict(rec, current_uid):
+    d = rec['fields']
+    return {
+        'id':           rec['id'],
+        'username':     d.get('Username', ''),
+        'email':        d.get('Email', ''),
+        'display_name': d.get('Name', ''),
+        'role':         d.get('Role', ''),
+        'course':       d.get('Course', 'both'),
+        'is_active':    1 if d.get('Is Active') else 0,
+        'you':          rec['id'] == current_uid,
+    }
+
+
 @app.route('/api/admin/users')
 @admin_required
 def get_admin_users():
-    db = get_db()
-    rows = db.execute(
-        "SELECT id, username, email, display_name, role, course, is_active FROM users WHERE role != 'student' ORDER BY display_name"
-    ).fetchall()
-    result = []
-    for r in rows:
-        d = dict(r)
-        d['you'] = (r['id'] == session['user_id'])
-        result.append(d)
-    return jsonify(result)
+    recs = users_table.all(formula="{Role}!='student'", sort=['Name'])
+    current_uid = session['user_id']
+    return jsonify([_admin_user_to_dict(r, current_uid) for r in recs])
+
 
 @app.route('/api/admin/users', methods=['POST'])
 @admin_required
 def create_admin_user():
-    data = request.get_json(silent=True) or {}
+    data     = request.get_json(silent=True) or {}
     name     = (data.get('name') or '').strip()
     username = (data.get('username') or '').strip().lower()
     password = (data.get('password') or '').strip()
@@ -930,210 +1000,66 @@ def create_admin_user():
     course   = data.get('course', 'both')
     if not name or not username or not password:
         return jsonify({'error': 'Name, username, and password required'}), 400
-    db = get_db()
-    if db.execute('SELECT id FROM users WHERE username = ?', (username,)).fetchone():
+    existing = users_table.first(formula=f"{{Username}}='{username}'")
+    if existing:
         return jsonify({'error': f'Username "{username}" already taken'}), 409
     initials = make_initials(name)
-    cur = db.execute(
-        'INSERT INTO users (username, email, display_name, initials, password_hash, role, course) VALUES (?,?,?,?,?,?,?)',
-        (username, '', name, initials, hash_password(password), role, course)
-    )
-    db.commit()
-    row = db.execute('SELECT id, username, display_name, role, course, is_active FROM users WHERE id = ?', (cur.lastrowid,)).fetchone()
-    d = dict(row)
-    d['you'] = False
-    return jsonify(d), 201
+    rec = users_table.create({
+        'Name':          name,
+        'Username':      username,
+        'Email':         '',
+        'Password Hash': hash_password(password),
+        'Role':          role,
+        'Course':        course,
+        'Initials':      initials,
+        'Is Active':     True,
+    })
+    return jsonify(_admin_user_to_dict(rec, session['user_id'])), 201
 
-@app.route('/api/admin/users/<int:user_id>', methods=['PATCH'])
+
+@app.route('/api/admin/users/<string:user_id>', methods=['PATCH'])
 @admin_required
 def update_admin_user(user_id):
     data = request.get_json(silent=True) or {}
-    db = get_db()
-    row = db.execute('SELECT id FROM users WHERE id = ?', (user_id,)).fetchone()
-    if not row:
+    rec = users_table.get(user_id)
+    if not rec:
         return jsonify({'error': 'Not found'}), 404
+
+    updates = {}
     if 'password' in data:
         new_pw = data['password'].strip()
         if len(new_pw) < 6:
             return jsonify({'error': 'Password too short'}), 400
-        db.execute('UPDATE users SET password_hash = ? WHERE id = ?',
-                   (hash_password(new_pw), user_id))
-    allowed = {k: v for k, v in data.items() if k in ('is_active', 'role', 'course')}
-    if allowed:
-        set_clause = ', '.join(f'{k} = ?' for k in allowed)
-        db.execute(f'UPDATE users SET {set_clause} WHERE id = ?', (*allowed.values(), user_id))
-    db.commit()
-    row = db.execute('SELECT id, username, display_name, role, course, is_active FROM users WHERE id = ?', (user_id,)).fetchone()
-    d = dict(row)
-    d['you'] = (user_id == session['user_id'])
-    return jsonify(d)
+        updates['Password Hash'] = hash_password(new_pw)
+    if 'is_active' in data:
+        updates['Is Active'] = bool(data['is_active'])
+    if 'role' in data:
+        updates['Role'] = data['role']
+    if 'course' in data:
+        updates['Course'] = data['course']
 
-@app.route('/api/admin/users/<int:user_id>', methods=['DELETE'])
+    if updates:
+        users_table.update(user_id, updates)
+
+    updated = users_table.get(user_id)
+    return jsonify(_admin_user_to_dict(updated, session['user_id']))
+
+
+@app.route('/api/admin/users/<string:user_id>', methods=['DELETE'])
 @admin_required
 def delete_admin_user(user_id):
     if user_id == session['user_id']:
         return jsonify({'error': 'Cannot delete your own account'}), 400
-    db = get_db()
-    db.execute("DELETE FROM users WHERE id = ? AND role != 'student'", (user_id,))
-    db.commit()
-    return jsonify({'ok': True})
-
-
-# ── FORMS API ────────────────────────────────────────────────────────────────
-
-@app.route('/api/forms')
-@login_required
-def get_forms():
-    db = get_db()
-    if session.get('role') == 'student':
-        rows = db.execute('''
-            SELECT fr.*, u.display_name as student_name,
-                   fs.submitted_at, fc.completed_at
-            FROM form_requests fr
-            LEFT JOIN users u ON u.id = fr.student_id
-            LEFT JOIN form_submissions fs ON fs.request_id = fr.id
-            LEFT JOIN form_completions fc ON fc.request_id = fr.id
-            WHERE fr.student_id = ?
-            ORDER BY fr.created_at DESC
-        ''', (session['user_id'],)).fetchall()
-    else:
-        rows = db.execute('''
-            SELECT fr.*, u.display_name as student_name,
-                   fs.submitted_at, fc.completed_at
-            FROM form_requests fr
-            LEFT JOIN users u ON u.id = fr.student_id
-            LEFT JOIN form_submissions fs ON fs.request_id = fr.id
-            LEFT JOIN form_completions fc ON fc.request_id = fr.id
-            ORDER BY fr.created_at DESC
-        ''').fetchall()
-    return jsonify([dict(r) for r in rows])
-
-
-@app.route('/api/forms', methods=['POST'])
-@admin_required
-def create_form_requests():
-    data        = request.get_json(silent=True) or {}
-    form_type   = data.get('form_type', 'i9')
-    student_ids = data.get('student_ids', [])
-    note        = data.get('note', '')
-    due_date    = data.get('due_date', '')
-    if not student_ids or form_type not in ('i9', 'w4'):
-        return jsonify({'error': 'form_type and student_ids required'}), 400
-    db = get_db()
-    created = []
-    for sid in student_ids:
-        stu = db.execute("SELECT id FROM users WHERE id = ? AND role = 'student'", (sid,)).fetchone()
-        if not stu:
-            continue
-        cur = db.execute(
-            'INSERT INTO form_requests (form_type, student_id, created_by, note, due_date) VALUES (?,?,?,?,?)',
-            (form_type, sid, session['user_id'], note, due_date)
-        )
-        created.append(cur.lastrowid)
-    db.commit()
-    return jsonify({'created': created}), 201
-
-
-@app.route('/api/forms/<int:form_id>')
-@login_required
-def get_form(form_id):
-    db = get_db()
-    row = db.execute('''
-        SELECT fr.*, u.display_name as student_name
-        FROM form_requests fr
-        LEFT JOIN users u ON u.id = fr.student_id
-        WHERE fr.id = ?
-    ''', (form_id,)).fetchone()
-    if not row:
-        return jsonify({'error': 'Not found'}), 404
-    if session.get('role') == 'student' and row['student_id'] != session['user_id']:
-        return jsonify({'error': 'Forbidden'}), 403
-    result = dict(row)
-    sub = db.execute('SELECT * FROM form_submissions WHERE request_id = ?', (form_id,)).fetchone()
-    if sub:
-        s = dict(sub)
-        s['fields'] = json.loads(s['fields'])
-        result['submission'] = s
-    comp = db.execute('''
-        SELECT fc.*, u.display_name as completed_by_name
-        FROM form_completions fc
-        LEFT JOIN users u ON u.id = fc.completed_by
-        WHERE fc.request_id = ?
-    ''', (form_id,)).fetchone()
-    if comp:
-        c = dict(comp)
-        c['fields'] = json.loads(c['fields'])
-        result['completion'] = c
-    return jsonify(result)
-
-
-@app.route('/api/forms/<int:form_id>/submit', methods=['POST'])
-@login_required
-def submit_form(form_id):
-    db = get_db()
-    row = db.execute('SELECT * FROM form_requests WHERE id = ?', (form_id,)).fetchone()
-    if not row:
-        return jsonify({'error': 'Not found'}), 404
-    if session.get('role') == 'student' and row['student_id'] != session['user_id']:
-        return jsonify({'error': 'Forbidden'}), 403
-    if row['status'] != 'pending':
-        return jsonify({'error': 'Form already submitted'}), 400
-    data      = request.get_json(silent=True) or {}
-    fields    = data.get('fields', {})
-    signature = data.get('signature', '')
-    if not signature:
-        return jsonify({'error': 'Signature required'}), 400
-    db.execute(
-        'INSERT INTO form_submissions (request_id, fields, signature) VALUES (?,?,?)',
-        (form_id, json.dumps(fields), signature)
-    )
-    new_status = 'submitted' if row['form_type'] == 'i9' else 'complete'
-    db.execute('UPDATE form_requests SET status = ? WHERE id = ?', (new_status, form_id))
-    db.commit()
-    return jsonify({'ok': True, 'status': new_status})
-
-
-@app.route('/api/forms/<int:form_id>/complete', methods=['POST'])
-@admin_required
-def complete_form(form_id):
-    db = get_db()
-    row = db.execute('SELECT * FROM form_requests WHERE id = ?', (form_id,)).fetchone()
-    if not row:
-        return jsonify({'error': 'Not found'}), 404
-    if row['status'] != 'submitted':
-        return jsonify({'error': 'Form not awaiting completion'}), 400
-    data      = request.get_json(silent=True) or {}
-    fields    = data.get('fields', {})
-    signature = data.get('signature', '')
-    if not signature:
-        return jsonify({'error': 'Admin signature required'}), 400
-    db.execute(
-        'INSERT INTO form_completions (request_id, fields, signature, completed_by) VALUES (?,?,?,?)',
-        (form_id, json.dumps(fields), signature, session['user_id'])
-    )
-    db.execute("UPDATE form_requests SET status = 'complete' WHERE id = ?", (form_id,))
-    db.commit()
-    return jsonify({'ok': True})
-
-
-@app.route('/api/forms/<int:form_id>', methods=['DELETE'])
-@admin_required
-def delete_form(form_id):
-    db = get_db()
-    db.execute('DELETE FROM form_completions WHERE request_id = ?', (form_id,))
-    db.execute('DELETE FROM form_submissions WHERE request_id = ?', (form_id,))
-    db.execute('DELETE FROM form_requests WHERE id = ?', (form_id,))
-    db.commit()
+    rec = users_table.get(user_id)
+    if not rec or rec['fields'].get('Role') == 'student':
+        return jsonify({'error': 'Not found or cannot delete student via this endpoint'}), 404
+    users_table.delete(user_id)
     return jsonify({'ok': True})
 
 
 # ── STARTUP ──────────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
-    init_db()
-    migrate_db()
-    import seed
-    seed.run()
     port  = int(os.environ.get('PORT', 5000))
     debug = os.environ.get('FLASK_ENV') == 'development'
     app.run(host='0.0.0.0', port=port, debug=debug)
