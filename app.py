@@ -358,9 +358,9 @@ def get_announcements():
     week_tag = request.args.get('week', '')
     if week_tag:
         formula = f"OR({{Week Tag}}='{week_tag}', {{Week Tag}}='')"
-        recs = announcements_table.all(formula=formula, sort=[{'field': 'Created At', 'direction': 'desc'}])
+        recs = announcements_table.all(formula=formula, sort=['-Created At'])
     else:
-        recs = announcements_table.all(sort=[{'field': 'Created At', 'direction': 'desc'}])
+        recs = announcements_table.all(sort=['-Created At'])
     return jsonify([_ann_to_dict(r) for r in recs])
 
 
@@ -928,7 +928,7 @@ def _note_to_dict(rec):
 def get_student_notes(student_id):
     recs = notes_table.all(
         formula=f"FIND('{student_id}', ARRAYJOIN({{Student}}, ','))>0",
-        sort=[{'field': 'Created At', 'direction': 'desc'}]
+        sort=['-Created At']
     )
     return jsonify([_note_to_dict(r) for r in recs])
 

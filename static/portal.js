@@ -164,14 +164,13 @@ async function api(method, path, body) {
 // ── POST-LOGIN DATA LOADER ────────────────────────────────────────────────────
 
 async function loadPortalData() {
-  const [evRes, modRes, annRes, rsvpRes, finRes, resRes, frmRes] = await Promise.all([
+  const [evRes, modRes, annRes, rsvpRes, finRes, resRes] = await Promise.all([
     fetch('/api/events'),
     fetch('/api/modules'),
     fetch('/api/announcements'),
     fetch('/api/rsvps'),
     fetch('/api/finance'),
     fetch('/api/resources'),
-    fetch('/api/forms'),
   ]);
 
   const evData   = await evRes.json();
@@ -180,7 +179,6 @@ async function loadPortalData() {
   const rsvpData = await rsvpRes.json();
   const finData  = await finRes.json();
   const resData  = await resRes.json();
-  const frmData  = await frmRes.json();
 
   ALL_EVENTS    = evData.map(transformEvent);
   const allMods = modData.map(transformModule);
@@ -196,7 +194,7 @@ async function loadPortalData() {
   finData.forEach(item => { if (item.checked) financeChecked.add(item.id); });
 
   resources     = resData;
-  formRequests  = Array.isArray(frmData) ? frmData : [];
+  formRequests  = [];
 
   updateCourseEvents();
   updateCourseModules();
