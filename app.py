@@ -1057,6 +1057,149 @@ def delete_admin_user(user_id):
     return jsonify({'ok': True})
 
 
+# ── SEED CONTENT ─────────────────────────────────────────────────────────────
+
+@app.route('/api/seed-content', methods=['POST'])
+def seed_content():
+    """Populate all content tables with starter placeholder data.
+    Safe to call multiple times — skips any section that already has records."""
+    data = request.get_json(silent=True) or {}
+    setup_key = request.headers.get('X-Setup-Key', '') or data.get('setup_key', '')
+    is_admin_session = session.get('role') in ('admin', 'coordinator', 'instructor')
+    if not is_admin_session and setup_key != SETUP_KEY:
+        return jsonify({'error': 'Forbidden — log in as admin or provide X-Setup-Key header'}), 403
+
+    now = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.000Z')
+    report = {}
+
+    # ── Announcements ─────────────────────────────────────────────────────────
+    if announcements_table.first():
+        report['announcements'] = 'skipped'
+    else:
+        for ann in [
+            {
+                'Title':      'Welcome to the Fellowship Portal',
+                'Body':       'This portal is your central hub for fellowship updates, calendar events, and resources. Check back regularly for announcements from program staff.',
+                'Category':   'info',
+                'Week Tag':   '',
+                'Created At': now,
+            },
+            {
+                'Title':      'Finance Documents & Deadlines',
+                'Body':       'All fellowship finance requirements and deadlines will be posted here. Use the Finance tab to track your checklist progress.',
+                'Category':   'deadline',
+                'Week Tag':   '',
+                'Created At': now,
+            },
+            {
+                'Title':      'Questions? Reach Out.',
+                'Body':       'Contact the Moynihan Center staff with any questions about the fellowship program. Contact info is available in the Resources tab.',
+                'Category':   'reminder',
+                'Week Tag':   '',
+                'Created At': now,
+            },
+        ]:
+            announcements_table.create(ann)
+        report['announcements'] = 'created 3'
+
+    # ── Finance checklist ─────────────────────────────────────────────────────
+    if finance_items_table.first():
+        report['finance_items'] = 'skipped'
+    else:
+        items = [
+            ('Complete fellowship onboarding paperwork',  'Download, fill out, and submit all required onboarding documents to the Moynihan Center office.',                    True,  1),
+            ('Sign participation agreement',              'Read and sign the fellowship participation agreement acknowledging program expectations and responsibilities.',        True,  2),
+            ('Set up CUNY direct deposit',               'Log into CUNYfirst and complete direct deposit setup so your stipend is deposited to the correct account.',           True,  3),
+            ('Submit W-9 tax form',                      'Submit a completed W-9 form to the financial office. Required for stipend processing.',                              True,  4),
+            ('Attend fellowship orientation',             'Attend the mandatory fellowship orientation session to meet staff, other fellows, and learn program expectations.',   True,  5),
+            ('Submit mid-year reflection form',           'Complete and submit the mid-year reflection form by the posted deadline.',                                           True,  6),
+            ('Submit end-of-year final report',          'Complete and submit your final fellowship report summarizing your work and learning over the year.',                  True,  7),
+            ('Return any borrowed program materials',     'Return all borrowed equipment, keys, or materials to the Moynihan Center by the end of the fellowship term.',        False, 8),
+        ]
+        for title, desc, req, idx in items:
+            finance_items_table.create({
+                'Title':       title,
+                'Description': desc,
+                'Is Required': req,
+                'Order Index': idx,
+            })
+        report['finance_items'] = f'created {len(items)}'
+
+    # ── Events ────────────────────────────────────────────────────────────────
+    if events_table.first():
+        report['events'] = 'skipped'
+    else:
+        events = [
+            ('Fellowship Orientation',          '2025-09-05', 'milestone',   'joint',    'All fellows required — location TBD', True),
+            ('First Meeting — PSC 31180',        '2025-09-10', 'lecture',     'psc31180', 'Update with room and time',           True),
+            ('First Meeting — PSC 31330',        '2025-09-11', 'lecture',     'psc31330', 'Update with room and time',           True),
+            ('Guest Speaker (TBD)',              '2025-10-15', 'guest',       'joint',    'Speaker and location TBD',            False),
+            ('Mid-Semester Fellow Check-In',     '2025-11-05', 'milestone',   'joint',    'Individual meetings with coordinator', True),
+            ('Spring Application Deadline',      '2025-11-15', 'application', 'joint',    'Submit via program portal',           True),
+            ('End-of-Semester Showcase',         '2025-12-10', 'milestone',   'joint',    'Location TBD',                        True),
+        ]
+        for title, date, cat, course, note, mandatory in events:
+            events_table.create({
+                'Title':        title,
+                'Date':         date,
+                'Category':     cat,
+                'Course':       course,
+                'Note':         note,
+                'Is Mandatory': mandatory,
+                'Is Hidden':    False,
+                'Is Locked':    False,
+            })
+        report['events'] = f'created {len(events)}'
+
+    # ── Syllabus modules ──────────────────────────────────────────────────────
+    if modules_table.first():
+        report['modules'] = 'skipped'
+    else:
+        mods = [
+            ('Introduction & Orientation', 'psc31180', 1, 'Overview of the fellowship program, introductions, and expectations. Update this description with your course-specific content.', 1),
+            ('Core Concepts',              'psc31180', 2, 'Foundational readings and frameworks for the semester. Edit this module to add weekly topics, readings, and assignments.',        2),
+            ('Research & Methods',         'psc31180', 3, 'Research methodology and applied work. Add sessions, readings, and deliverables via the Airtable base.',                          3),
+            ('Introduction & Orientation', 'psc31330', 1, 'Overview of the fellowship program, introductions, and expectations. Update this description with your course-specific content.', 1),
+            ('Practicum Methods',          'psc31330', 2, 'Applied practicum methods and field preparation. Edit this module to add weekly topics, readings, and assignments.',               2),
+            ('Applied Research',           'psc31330', 3, 'Applied research projects and presentations. Add sessions, readings, and deliverables via the Airtable base.',                    3),
+        ]
+        for title, course, week_num, overview, order in mods:
+            modules_table.create({
+                'Title':       title,
+                'Course':      course,
+                'Week Number': week_num,
+                'Overview':    overview,
+                'Order Index': order,
+            })
+        report['modules'] = f'created {len(mods)}'
+
+    # ── Resources ─────────────────────────────────────────────────────────────
+    if resources_table.first(formula='{Is Active}=1'):
+        report['resources'] = 'skipped'
+    else:
+        resources = [
+            ('CUNY Student Portal',      'https://www.cuny.edu',                                 'Main CUNY student portal — course registration, records, and services.',          'general',  1),
+            ('CUNYfirst',                'https://home.cunyfirst.cuny.edu',                      'Access financial aid, course enrollment, and your student account.',               'general',  2),
+            ('Moynihan Center Website',  'https://www.ccny.cuny.edu/moynihan',                   'Official Moynihan Center site with program information and staff contacts.',        'general',  3),
+            ('CCNY Financial Aid',       'https://www.ccny.cuny.edu/financialaid',               'CCNY Financial Aid office — questions about stipends and funding.',                'finance',  1),
+            ('CUNY Bursar Office',       'https://www.ccny.cuny.edu/bursar',                     'Tuition, payments, and financial account management.',                             'finance',  2),
+            ('CUNY Academic Calendar',   'https://www.cuny.edu/academics/academic-calendars/',   'Official CUNY academic calendar with deadlines, holidays, and semester dates.',    'academic', 1),
+            ('CCNY Cohen Library',       'https://library.ccny.cuny.edu',                        'Research databases, course reserves, and study spaces.',                           'academic', 2),
+        ]
+        for title, url, desc, cat, order in resources:
+            resources_table.create({
+                'Title':       title,
+                'URL':         url,
+                'Description': desc,
+                'Category':    cat,
+                'Is Active':   True,
+                'Order Index': order,
+            })
+        report['resources'] = f'created {len(resources)}'
+
+    return jsonify({'ok': True, 'report': report})
+
+
 # ── STARTUP ──────────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
