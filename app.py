@@ -3,14 +3,24 @@ import csv
 import io
 import json
 import sqlite3
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from functools import wraps
 
 import bcrypt
 from flask import Flask, g, jsonify, render_template, request, session, Response
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-change-in-production')
+
+_secret = os.environ.get('SECRET_KEY')
+if not _secret:
+    import sys
+    if os.environ.get('FLASK_ENV') == 'production':
+        sys.exit('FATAL: SECRET_KEY environment variable is not set. Refusing to start.')
+    _secret = 'dev-secret-change-in-production'
+app.secret_key = _secret
+
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)
+app.config['SESSION_REFRESH_EACH_REQUEST'] = True
 
 DATABASE = os.environ.get('DATABASE_URL', 'portal.db')
 DEFAULT_PASSWORD = os.environ.get('DEFAULT_STUDENT_PASSWORD', 'moynihan2025')
@@ -257,6 +267,15 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated
 
+def can_access_course(student_course):
+    """True if the current admin has legitimate access to a student's course."""
+    my_course = session.get('course')
+    if session.get('role') == 'admin':
+        return True  # site admin sees everything
+    if not my_course or my_course == 'both':
+        return True
+    return student_course == my_course or student_course == 'both'
+
 def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -294,6 +313,7 @@ def login():
     ).fetchone()
     if not user or not check_password(password, user['password_hash']):
         return jsonify({'error': 'Incorrect username or password'}), 401
+    session.permanent   = True
     session['user_id']  = user['id']
     session['username'] = user['username']
     session['role']     = user['role']
@@ -565,11 +585,20 @@ def toggle_rsvp(event_id):
 @admin_required
 def get_all_rsvps():
     db = get_db()
-    rows = db.execute('''
-        SELECT r.event_id, r.user_id, u.display_name, u.email
-        FROM rsvps r JOIN users u ON u.id = r.user_id
-        ORDER BY r.event_id
-    ''').fetchall()
+    my_course = session.get('course')
+    if session.get('role') == 'admin' or not my_course or my_course == 'both':
+        rows = db.execute('''
+            SELECT r.event_id, r.user_id, u.display_name, u.email
+            FROM rsvps r JOIN users u ON u.id = r.user_id
+            ORDER BY r.event_id
+        ''').fetchall()
+    else:
+        rows = db.execute('''
+            SELECT r.event_id, r.user_id, u.display_name, u.email
+            FROM rsvps r JOIN users u ON u.id = r.user_id
+            WHERE u.course = ? OR u.course = 'both'
+            ORDER BY r.event_id
+        ''', (my_course,)).fetchall()
     by_event = {}
     for r in rows:
         eid = r['event_id']
@@ -652,13 +681,24 @@ def toggle_finance_check(item_id):
 @admin_required
 def get_all_finance_checks():
     db = get_db()
-    rows = db.execute('''
-        SELECT fc.item_id, fc.user_id, u.display_name, fi.title
-        FROM student_finance_checks fc
-        JOIN users u ON u.id = fc.user_id
-        JOIN finance_items fi ON fi.id = fc.item_id
-        ORDER BY fi.order_index, u.display_name
-    ''').fetchall()
+    my_course = session.get('course')
+    if session.get('role') == 'admin' or not my_course or my_course == 'both':
+        rows = db.execute('''
+            SELECT fc.item_id, fc.user_id, u.display_name, fi.title
+            FROM student_finance_checks fc
+            JOIN users u ON u.id = fc.user_id
+            JOIN finance_items fi ON fi.id = fc.item_id
+            ORDER BY fi.order_index, u.display_name
+        ''').fetchall()
+    else:
+        rows = db.execute('''
+            SELECT fc.item_id, fc.user_id, u.display_name, fi.title
+            FROM student_finance_checks fc
+            JOIN users u ON u.id = fc.user_id
+            JOIN finance_items fi ON fi.id = fc.item_id
+            WHERE u.course = ? OR u.course = 'both'
+            ORDER BY fi.order_index, u.display_name
+        ''', (my_course,)).fetchall()
     by_item = {}
     for r in rows:
         iid = r['item_id']
@@ -713,9 +753,16 @@ def delete_resource(res_id):
 @admin_required
 def get_students():
     db = get_db()
-    rows = db.execute(
-        "SELECT id, username, email, display_name, course, is_active FROM users WHERE role = 'student' ORDER BY display_name"
-    ).fetchall()
+    my_course = session.get('course')
+    if session.get('role') == 'admin' or not my_course or my_course == 'both':
+        rows = db.execute(
+            "SELECT id, username, email, display_name, course, is_active FROM users WHERE role = 'student' ORDER BY display_name"
+        ).fetchall()
+    else:
+        rows = db.execute(
+            "SELECT id, username, email, display_name, course, is_active FROM users WHERE role = 'student' AND (course = ? OR course = 'both') ORDER BY display_name",
+            (my_course,)
+        ).fetchall()
     return jsonify([dict(r) for r in rows])
 
 @app.route('/api/students', methods=['POST'])
@@ -799,11 +846,16 @@ def import_students():
 @app.route('/api/students/<int:student_id>/reset-password', methods=['POST'])
 @admin_required
 def reset_student_password(student_id):
+    db = get_db()
+    student = db.execute("SELECT course FROM users WHERE id = ? AND role = 'student'", (student_id,)).fetchone()
+    if not student:
+        return jsonify({'error': 'Student not found'}), 404
+    if not can_access_course(student['course']):
+        return jsonify({'error': 'Forbidden — student is not in your course'}), 403
     data = request.get_json(silent=True) or {}
     new_pass = (data.get('password') or DEFAULT_PASSWORD).strip()
     if len(new_pass) < 6:
         return jsonify({'error': 'Password too short'}), 400
-    db = get_db()
     db.execute("UPDATE users SET password_hash = ? WHERE id = ? AND role = 'student'",
                (hash_password(new_pass), student_id))
     db.commit()
