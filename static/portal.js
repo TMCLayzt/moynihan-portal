@@ -16,11 +16,16 @@ const MONTHS_FULL = ['January','February','March','April','May','June','July','A
 const DAYS_SHORT  = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const WEEKDAYS    = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
-const ANN_COLORS = {
-  maroon: { border:'#8B1A1A', bg:'#f5e8e8' },
-  blue:   { border:'#185FA5', bg:'#E6F1FB' },
-  orange: { border:'#D85A30', bg:'#FAECE7' },
-  amber:  { border:'#BA7517', bg:'#FAEEDA' },
+const ANN_CATS = {
+  general:  { label:'General',  border:'#8B1A1A', bg:'#f5e8e8' },
+  info:     { label:'Info',     border:'#185FA5', bg:'#E6F1FB' },
+  deadline: { label:'Deadline', border:'#D85A30', bg:'#FAECE7' },
+  reminder: { label:'Reminder', border:'#BA7517', bg:'#FAEEDA' },
+  // backwards compat with old color-named entries
+  maroon: { label:'General',  border:'#8B1A1A', bg:'#f5e8e8' },
+  blue:   { label:'Info',     border:'#185FA5', bg:'#E6F1FB' },
+  orange: { label:'Deadline', border:'#D85A30', bg:'#FAECE7' },
+  amber:  { label:'Reminder', border:'#BA7517', bg:'#FAEEDA' },
 };
 
 const ROLE_LABELS = {
@@ -539,10 +544,14 @@ function renderDashboardAnnouncements() {
   el.innerHTML = `<div class="section-label">Announcements</div>` +
     (visible.length
       ? visible.map(a => {
-          const c = ANN_COLORS[a.color] || ANN_COLORS.maroon;
+          const c = ANN_CATS[a.category] || ANN_CATS.general;
           const weekLabel = a.week_tag ? `<span class="ann-week-badge">Week ${a.week_tag}</span>` : '';
           return `<div class="announcement" style="border-left-color:${c.border};background:${c.bg}">
-            <div class="announcement-title">${a.title}${weekLabel}</div>
+            <div class="ann-meta-row">
+              <span class="ann-cat-label" style="color:${c.border}">${c.label}</span>
+              ${weekLabel}
+            </div>
+            <div class="announcement-title">${a.title}</div>
             <div class="announcement-body">${a.body}</div>
           </div>`;
         }).join('')
@@ -558,7 +567,7 @@ function renderAdminAnnouncements() {
     return;
   }
   el.innerHTML = announcements.map(a => {
-    const c = ANN_COLORS[a.color] || ANN_COLORS.maroon;
+    const c = ANN_CATS[a.category] || ANN_CATS.general;
     return `<div class="admin-list-row">
       <div class="admin-list-accent" style="background:${c.border}"></div>
       <div class="admin-list-body">
@@ -566,8 +575,8 @@ function renderAdminAnnouncements() {
         <div class="admin-list-meta">${a.body.slice(0,90)}${a.body.length>90?'…':''}</div>
       </div>
       <div class="admin-list-actions">
-        <span class="badge" style="background:${c.bg};color:${c.border};font-size:10px">${a.color}</span>
-        <button class="admin-btn-danger" onclick="deleteAnnouncement(${a.id})">Delete</button>
+        <span class="badge" style="background:${c.bg};color:${c.border};font-size:10px">${c.label}</span>
+        <button class="admin-btn-danger" onclick="deleteAnnouncement('${a.id}')">Delete</button>
       </div>
     </div>`;
   }).join('');
