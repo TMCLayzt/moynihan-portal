@@ -316,7 +316,7 @@ function showView(name) {
     renderAdminEvents('all');
     const c  = COURSES[activeCourse] || COURSES.psc31180;
     const el = document.getElementById('adminCourseIndicator');
-    if (el) el.innerHTML = `<span style="font-size:12px;color:rgba(255,255,255,0.6);font-weight:500">${c.code} &mdash; ${c.instructor}</span>`;
+    if (el) el.innerHTML = `${c.code} &mdash; ${c.instructor}`;
   }
   window.scrollTo(0,0);
 }

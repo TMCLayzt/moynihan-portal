@@ -497,16 +497,6 @@
      ADMIN VIEW
 ════════════════════════════════════════ -->
 <div id="view-admin" class="view admin-only">
-  <div class="page-hero" style="background:var(--gray-brand);border-bottom:none">
-    <div class="page-hero-inner">
-      <div>
-        <div class="page-hero-meta" style="color:rgba(255,255,255,0.5)">Admin Panel &mdash; Instructor Access Only</div>
-        <h1 style="color:white">Course <strong>Management</strong></h1>
-      </div>
-      <div style="display:flex;gap:10px" id="adminCourseIndicator"></div>
-    </div>
-  </div>
-
   <div class="admin-tab-bar">
     <button class="admin-tab active" onclick="switchAdminTab('announcements')">Announcements</button>
     <button class="admin-tab" onclick="switchAdminTab('events')">Events</button>
@@ -518,6 +508,7 @@
     <button class="admin-tab" onclick="switchAdminTab('students')">Students</button>
     <button class="admin-tab" onclick="switchAdminTab('users')">Admin users</button>
     <button class="admin-tab" onclick="switchAdminTab('settings')">Settings</button>
+    <span id="adminCourseIndicator" style="margin-left:auto;font-size:11px;color:var(--gray-mid);align-self:center;padding-right:1rem;white-space:nowrap"></span>
   </div>
 
   <div class="container" style="padding-top:2rem;padding-bottom:3rem">
