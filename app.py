@@ -1,6 +1,7 @@
 import os
 import csv
 import io
+import json
 import sqlite3
 from datetime import datetime, date
 from functools import wraps
@@ -150,6 +151,36 @@ def init_db():
             is_active   INTEGER NOT NULL DEFAULT 1,
             created_at  TEXT    DEFAULT (datetime('now'))
         );
+        CREATE TABLE IF NOT EXISTS form_requests (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            form_type   TEXT    NOT NULL,
+            student_id  INTEGER NOT NULL,
+            created_by  INTEGER NOT NULL,
+            status      TEXT    NOT NULL DEFAULT 'pending',
+            note        TEXT    DEFAULT '',
+            due_date    TEXT    DEFAULT '',
+            created_at  TEXT    DEFAULT (datetime('now')),
+            FOREIGN KEY (student_id)  REFERENCES users(id),
+            FOREIGN KEY (created_by)  REFERENCES users(id)
+        );
+        CREATE TABLE IF NOT EXISTS form_submissions (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            request_id   INTEGER NOT NULL UNIQUE,
+            fields       TEXT    NOT NULL,
+            signature    TEXT    NOT NULL,
+            submitted_at TEXT    DEFAULT (datetime('now')),
+            FOREIGN KEY (request_id) REFERENCES form_requests(id)
+        );
+        CREATE TABLE IF NOT EXISTS form_completions (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            request_id   INTEGER NOT NULL UNIQUE,
+            fields       TEXT    NOT NULL,
+            signature    TEXT    NOT NULL,
+            completed_by INTEGER NOT NULL,
+            completed_at TEXT    DEFAULT (datetime('now')),
+            FOREIGN KEY (request_id)  REFERENCES form_requests(id),
+            FOREIGN KEY (completed_by) REFERENCES users(id)
+        );
     ''')
     db.commit()
     db.close()
@@ -170,6 +201,42 @@ def migrate_db():
             db.execute(f'ALTER TABLE {table} ADD COLUMN {col} {coldef}')
         except Exception:
             pass  # column already exists
+    db.executescript('''
+        CREATE TABLE IF NOT EXISTS student_notes (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id      INTEGER NOT NULL,
+            body            TEXT    NOT NULL,
+            author_id       INTEGER NOT NULL,
+            author_initials TEXT    NOT NULL DEFAULT '',
+            author_name     TEXT    NOT NULL DEFAULT '',
+            created_at      TEXT    DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS form_requests (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            form_type   TEXT    NOT NULL,
+            student_id  INTEGER NOT NULL,
+            created_by  INTEGER NOT NULL,
+            status      TEXT    NOT NULL DEFAULT 'pending',
+            note        TEXT    DEFAULT '',
+            due_date    TEXT    DEFAULT '',
+            created_at  TEXT    DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS form_submissions (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            request_id   INTEGER NOT NULL UNIQUE,
+            fields       TEXT    NOT NULL,
+            signature    TEXT    NOT NULL,
+            submitted_at TEXT    DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS form_completions (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            request_id   INTEGER NOT NULL UNIQUE,
+            fields       TEXT    NOT NULL,
+            signature    TEXT    NOT NULL,
+            completed_by INTEGER NOT NULL,
+            completed_at TEXT    DEFAULT (datetime('now'))
+        );
+    ''')
     db.commit()
     db.close()
 
@@ -743,6 +810,47 @@ def reset_student_password(student_id):
     return jsonify({'ok': True})
 
 
+# ── STUDENT NOTES API ────────────────────────────────────────────────────────
+
+@app.route('/api/students/<int:student_id>/notes')
+@admin_required
+def get_student_notes(student_id):
+    db = get_db()
+    rows = db.execute(
+        'SELECT id, body, author_initials, author_name, created_at FROM student_notes WHERE student_id = ? ORDER BY created_at DESC',
+        (student_id,)
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+@app.route('/api/students/<int:student_id>/notes', methods=['POST'])
+@admin_required
+def add_student_note(student_id):
+    data = request.get_json(silent=True) or {}
+    body = (data.get('body') or '').strip()
+    if not body:
+        return jsonify({'error': 'Note body required'}), 400
+    author_id = session['user_id']
+    db = get_db()
+    author = db.execute('SELECT display_name, initials FROM users WHERE id = ?', (author_id,)).fetchone()
+    author_initials = author['initials'] if author and author['initials'] else ''
+    author_name = author['display_name'] if author else ''
+    cur = db.execute(
+        'INSERT INTO student_notes (student_id, body, author_id, author_initials, author_name) VALUES (?,?,?,?,?)',
+        (student_id, body, author_id, author_initials, author_name)
+    )
+    db.commit()
+    row = db.execute('SELECT id, body, author_initials, author_name, created_at FROM student_notes WHERE id = ?', (cur.lastrowid,)).fetchone()
+    return jsonify(dict(row)), 201
+
+@app.route('/api/student-notes/<int:note_id>', methods=['DELETE'])
+@admin_required
+def delete_student_note(note_id):
+    db = get_db()
+    db.execute('DELETE FROM student_notes WHERE id = ?', (note_id,))
+    db.commit()
+    return jsonify({'ok': True})
+
+
 # ── ADMIN USERS API ──────────────────────────────────────────────────────────
 
 @app.route('/api/admin/users')
@@ -815,6 +923,154 @@ def delete_admin_user(user_id):
         return jsonify({'error': 'Cannot delete your own account'}), 400
     db = get_db()
     db.execute("DELETE FROM users WHERE id = ? AND role != 'student'", (user_id,))
+    db.commit()
+    return jsonify({'ok': True})
+
+
+# ── FORMS API ────────────────────────────────────────────────────────────────
+
+@app.route('/api/forms')
+@login_required
+def get_forms():
+    db = get_db()
+    if session.get('role') == 'student':
+        rows = db.execute('''
+            SELECT fr.*, u.display_name as student_name,
+                   fs.submitted_at, fc.completed_at
+            FROM form_requests fr
+            LEFT JOIN users u ON u.id = fr.student_id
+            LEFT JOIN form_submissions fs ON fs.request_id = fr.id
+            LEFT JOIN form_completions fc ON fc.request_id = fr.id
+            WHERE fr.student_id = ?
+            ORDER BY fr.created_at DESC
+        ''', (session['user_id'],)).fetchall()
+    else:
+        rows = db.execute('''
+            SELECT fr.*, u.display_name as student_name,
+                   fs.submitted_at, fc.completed_at
+            FROM form_requests fr
+            LEFT JOIN users u ON u.id = fr.student_id
+            LEFT JOIN form_submissions fs ON fs.request_id = fr.id
+            LEFT JOIN form_completions fc ON fc.request_id = fr.id
+            ORDER BY fr.created_at DESC
+        ''').fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route('/api/forms', methods=['POST'])
+@admin_required
+def create_form_requests():
+    data        = request.get_json(silent=True) or {}
+    form_type   = data.get('form_type', 'i9')
+    student_ids = data.get('student_ids', [])
+    note        = data.get('note', '')
+    due_date    = data.get('due_date', '')
+    if not student_ids or form_type not in ('i9', 'w4'):
+        return jsonify({'error': 'form_type and student_ids required'}), 400
+    db = get_db()
+    created = []
+    for sid in student_ids:
+        stu = db.execute("SELECT id FROM users WHERE id = ? AND role = 'student'", (sid,)).fetchone()
+        if not stu:
+            continue
+        cur = db.execute(
+            'INSERT INTO form_requests (form_type, student_id, created_by, note, due_date) VALUES (?,?,?,?,?)',
+            (form_type, sid, session['user_id'], note, due_date)
+        )
+        created.append(cur.lastrowid)
+    db.commit()
+    return jsonify({'created': created}), 201
+
+
+@app.route('/api/forms/<int:form_id>')
+@login_required
+def get_form(form_id):
+    db = get_db()
+    row = db.execute('''
+        SELECT fr.*, u.display_name as student_name
+        FROM form_requests fr
+        LEFT JOIN users u ON u.id = fr.student_id
+        WHERE fr.id = ?
+    ''', (form_id,)).fetchone()
+    if not row:
+        return jsonify({'error': 'Not found'}), 404
+    if session.get('role') == 'student' and row['student_id'] != session['user_id']:
+        return jsonify({'error': 'Forbidden'}), 403
+    result = dict(row)
+    sub = db.execute('SELECT * FROM form_submissions WHERE request_id = ?', (form_id,)).fetchone()
+    if sub:
+        s = dict(sub)
+        s['fields'] = json.loads(s['fields'])
+        result['submission'] = s
+    comp = db.execute('''
+        SELECT fc.*, u.display_name as completed_by_name
+        FROM form_completions fc
+        LEFT JOIN users u ON u.id = fc.completed_by
+        WHERE fc.request_id = ?
+    ''', (form_id,)).fetchone()
+    if comp:
+        c = dict(comp)
+        c['fields'] = json.loads(c['fields'])
+        result['completion'] = c
+    return jsonify(result)
+
+
+@app.route('/api/forms/<int:form_id>/submit', methods=['POST'])
+@login_required
+def submit_form(form_id):
+    db = get_db()
+    row = db.execute('SELECT * FROM form_requests WHERE id = ?', (form_id,)).fetchone()
+    if not row:
+        return jsonify({'error': 'Not found'}), 404
+    if session.get('role') == 'student' and row['student_id'] != session['user_id']:
+        return jsonify({'error': 'Forbidden'}), 403
+    if row['status'] != 'pending':
+        return jsonify({'error': 'Form already submitted'}), 400
+    data      = request.get_json(silent=True) or {}
+    fields    = data.get('fields', {})
+    signature = data.get('signature', '')
+    if not signature:
+        return jsonify({'error': 'Signature required'}), 400
+    db.execute(
+        'INSERT INTO form_submissions (request_id, fields, signature) VALUES (?,?,?)',
+        (form_id, json.dumps(fields), signature)
+    )
+    new_status = 'submitted' if row['form_type'] == 'i9' else 'complete'
+    db.execute('UPDATE form_requests SET status = ? WHERE id = ?', (new_status, form_id))
+    db.commit()
+    return jsonify({'ok': True, 'status': new_status})
+
+
+@app.route('/api/forms/<int:form_id>/complete', methods=['POST'])
+@admin_required
+def complete_form(form_id):
+    db = get_db()
+    row = db.execute('SELECT * FROM form_requests WHERE id = ?', (form_id,)).fetchone()
+    if not row:
+        return jsonify({'error': 'Not found'}), 404
+    if row['status'] != 'submitted':
+        return jsonify({'error': 'Form not awaiting completion'}), 400
+    data      = request.get_json(silent=True) or {}
+    fields    = data.get('fields', {})
+    signature = data.get('signature', '')
+    if not signature:
+        return jsonify({'error': 'Admin signature required'}), 400
+    db.execute(
+        'INSERT INTO form_completions (request_id, fields, signature, completed_by) VALUES (?,?,?,?)',
+        (form_id, json.dumps(fields), signature, session['user_id'])
+    )
+    db.execute("UPDATE form_requests SET status = 'complete' WHERE id = ?", (form_id,))
+    db.commit()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/forms/<int:form_id>', methods=['DELETE'])
+@admin_required
+def delete_form(form_id):
+    db = get_db()
+    db.execute('DELETE FROM form_completions WHERE request_id = ?', (form_id,))
+    db.execute('DELETE FROM form_submissions WHERE request_id = ?', (form_id,))
+    db.execute('DELETE FROM form_requests WHERE id = ?', (form_id,))
     db.commit()
     return jsonify({'ok': True})
 

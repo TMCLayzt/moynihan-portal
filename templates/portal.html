@@ -58,8 +58,18 @@
     <div class="topbar-inner">
       <a class="topbar-brand" href="#">
         <div class="topbar-logo">MC</div>
-        <span class="topbar-name">The Moynihan Center &mdash; Fellowship Portal</span>
+        <span class="topbar-name">The Moynihan Center</span>
       </a>
+      <nav class="topbar-nav" aria-label="Main navigation">
+        <a class="subnav-link active" onclick="showView('dashboard')">Dashboard</a>
+        <a class="subnav-link" onclick="showView('calendar')">Calendar</a>
+        <a class="subnav-link" onclick="showView('modules')">Syllabus</a>
+        <a class="subnav-link" onclick="showView('finance')">Finance</a>
+        <a class="subnav-link admin-only" onclick="showView('forms')">Forms</a>
+        <a class="subnav-link" onclick="showView('resources')">Resources</a>
+        <a class="subnav-link" onclick="showView('about')">About</a>
+        <a class="subnav-link admin-only" onclick="showView('admin')" id="adminNavLink">&#9881; Admin</a>
+      </nav>
       <div class="topbar-user">
         <div style="position:relative">
           <div class="topbar-user-avatar" id="userAvatar" onclick="toggleUserDropdown()">ST</div>
@@ -82,18 +92,6 @@
       </div>
     </div>
   </div>
-
-  <nav class="subnav" aria-label="Main navigation">
-    <div class="subnav-inner">
-      <a class="subnav-link active" onclick="showView('dashboard')">Dashboard</a>
-      <a class="subnav-link" onclick="showView('calendar')">Calendar</a>
-      <a class="subnav-link" onclick="showView('modules')">Syllabus</a>
-      <a class="subnav-link" onclick="showView('finance')">Finance</a>
-      <a class="subnav-link" onclick="showView('resources')">Resources</a>
-      <a class="subnav-link" onclick="showView('about')">About</a>
-      <a class="subnav-link admin-only" onclick="showView('admin')" id="adminNavLink" style="margin-left:auto;color:rgba(255,255,255,0.5);border-left:1px solid #444;padding-left:20px">&#9881; Admin</a>
-    </div>
-  </nav>
 </header>
 
 <!-- PANEL OVERLAY -->
@@ -278,6 +276,37 @@
       </p>
       <div id="financeProgress" style="max-width:500px;margin-bottom:2rem"></div>
       <div id="financeChecklist"></div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════
+     FORMS VIEW
+════════════════════════════════════════ -->
+<div id="view-forms" class="view admin-only">
+  <div class="page-hero">
+    <div class="page-hero-inner">
+      <div>
+        <div class="page-hero-meta">Employment &amp; Tax Documents</div>
+        <h1>My <strong>Forms</strong></h1>
+      </div>
+      <button class="btn-sm btn-primary admin-only" onclick="showView('admin'); setTimeout(() => switchAdminTabByName('forms'), 80)">&#9881; Manage forms</button>
+    </div>
+  </div>
+  <div class="container">
+    <div class="section">
+      <div class="student-only">
+        <p style="font-size:14px;color:var(--gray-mid);max-width:600px;margin-bottom:2rem">
+          Forms sent to you by the fellowship office appear below. Complete each pending form and sign electronically. Completed forms are stored here for your records.
+        </p>
+        <div id="studentFormsList"></div>
+        <div id="studentFormsEmpty" style="display:none;color:var(--gray-mid);font-size:14px;padding:2rem 0">No forms have been sent to you yet.</div>
+      </div>
+      <div class="admin-only" style="padding:2rem 0">
+        <p style="font-size:14px;color:var(--gray-mid);margin-bottom:1rem">Send and manage forms from <strong>Admin &rarr; Forms</strong>.</p>
+        <button class="admin-btn-primary" onclick="showView('admin'); setTimeout(() => switchAdminTabByName('forms'), 80)">Open Admin &rarr; Forms</button>
+      </div>
     </div>
   </div>
 </div>
@@ -481,6 +510,7 @@
     <button class="admin-tab" onclick="switchAdminTab('syllabus')">Syllabus</button>
     <button class="admin-tab" onclick="switchAdminTab('finance')">Finance</button>
     <button class="admin-tab" onclick="switchAdminTab('resources')">Resources</button>
+    <button class="admin-tab" onclick="switchAdminTab('forms')">Forms</button>
     <button class="admin-tab" onclick="switchAdminTab('students')">Students</button>
     <button class="admin-tab" onclick="switchAdminTab('users')">Admin users</button>
     <button class="admin-tab" onclick="switchAdminTab('settings')">Settings</button>
@@ -670,6 +700,60 @@
       <div id="adminResourceList"></div>
     </div>
 
+    <!-- ── FORMS ── -->
+    <div class="admin-panel" id="apanel-forms">
+      <div class="admin-section-header">
+        <div>
+          <div class="admin-section-title">Form sender</div>
+          <div class="admin-section-sub">Send I-9 or W-4 forms to fellows for electronic completion and signature. Track status and complete I-9 Section 2 after reviewing documents.</div>
+        </div>
+      </div>
+
+      <div class="admin-form-card">
+        <div class="admin-form-title">Send a form</div>
+        <div class="admin-row-2">
+          <div class="form-group">
+            <label class="form-label">Form type</label>
+            <select class="form-input" id="frm-type">
+              <option value="i9">I-9 &mdash; Employment Eligibility Verification</option>
+              <option value="w4">W-4 &mdash; Employee&rsquo;s Withholding Certificate</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Due date <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
+            <input class="form-input" id="frm-due" type="date">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Note to student <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
+          <input class="form-input" id="frm-note" type="text" placeholder="e.g. Please complete before your first day">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Send to <span style="font-weight:400;text-transform:none;letter-spacing:0">(select one or more students)</span></label>
+          <div style="display:flex;gap:8px;margin-bottom:6px">
+            <button class="admin-btn-secondary" style="font-size:11px;padding:3px 10px" onclick="toggleAllFrmStudents(true)">Select all</button>
+            <button class="admin-btn-secondary" style="font-size:11px;padding:3px 10px" onclick="toggleAllFrmStudents(false)">Clear</button>
+          </div>
+          <div class="frm-student-list" id="frmStudentList">
+            <div style="padding:12px;font-size:13px;color:var(--gray-mid)">Loading students&hellip;</div>
+          </div>
+        </div>
+        <button class="admin-btn-primary" onclick="sendForms()">Send form</button>
+        <div id="frmSendResult" style="margin-top:0.75rem;font-size:13px;color:var(--gray-mid)"></div>
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:2rem;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
+        <div class="admin-section-title" style="margin:0">All sent forms <span id="formsAdminCount" style="font-weight:400;color:var(--gray-mid)"></span></div>
+      </div>
+      <div class="admin-filter-bar">
+        <button class="admin-filter active" onclick="filterAdminForms('all',this)">All</button>
+        <button class="admin-filter" onclick="filterAdminForms('pending',this)">Pending</button>
+        <button class="admin-filter" onclick="filterAdminForms('submitted',this)">Awaiting review</button>
+        <button class="admin-filter" onclick="filterAdminForms('complete',this)">Complete</button>
+      </div>
+      <div id="adminFormsList"></div>
+    </div>
+
     <!-- ── STUDENTS ── -->
     <div class="admin-panel" id="apanel-students">
       <div class="admin-section-header">
@@ -831,8 +915,41 @@
   </div>
 </div>
 
+<!-- ── FORM FILL MODAL (student fills out a pending form) ── -->
+<div class="modal-overlay" id="formFillModal" onclick="handleFormFillOverlayClick(event)">
+  <div class="modal-card modal-wide">
+    <div class="modal-header">
+      <div>
+        <span class="modal-title" id="formFillTitle">Complete Form</span>
+        <div id="formFillNote" style="font-size:12px;color:rgba(255,255,255,0.7);margin-top:2px"></div>
+      </div>
+      <button class="modal-close" onclick="closeFormFill()">&#10005;</button>
+    </div>
+    <div class="modal-body form-modal-body" id="formFillBody">
+      <!-- Populated by JS -->
+    </div>
+  </div>
+</div>
+
+<!-- ── FORM REVIEW MODAL (view submission + admin complete I-9) ── -->
+<div class="modal-overlay" id="formReviewModal" onclick="handleFormReviewOverlayClick(event)">
+  <div class="modal-card modal-wide">
+    <div class="modal-header">
+      <div>
+        <span class="modal-title" id="formReviewTitle">Form Details</span>
+        <div id="formReviewSubtitle" style="font-size:12px;color:rgba(255,255,255,0.7);margin-top:2px"></div>
+      </div>
+      <button class="modal-close" onclick="closeFormReview()">&#10005;</button>
+    </div>
+    <div class="modal-body form-modal-body" id="formReviewBody">
+      <!-- Populated by JS -->
+    </div>
+  </div>
+</div>
+
 </div><!-- /#portalApp -->
 
+<script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
 <script src="/static/portal.js"></script>
 </body>
 </html>
