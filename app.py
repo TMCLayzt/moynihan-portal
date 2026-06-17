@@ -1151,28 +1151,6 @@ def seed_content():
             })
         report['events'] = f'created {len(events)}'
 
-    # ── Syllabus modules ──────────────────────────────────────────────────────
-    if modules_table.first():
-        report['modules'] = 'skipped'
-    else:
-        mods = [
-            ('Introduction & Orientation', 'psc31180', 1, 'Overview of the fellowship program, introductions, and expectations. Update this description with your course-specific content.', 1),
-            ('Core Concepts',              'psc31180', 2, 'Foundational readings and frameworks for the semester. Edit this module to add weekly topics, readings, and assignments.',        2),
-            ('Research & Methods',         'psc31180', 3, 'Research methodology and applied work. Add sessions, readings, and deliverables via the Airtable base.',                          3),
-            ('Introduction & Orientation', 'psc31330', 1, 'Overview of the fellowship program, introductions, and expectations. Update this description with your course-specific content.', 1),
-            ('Practicum Methods',          'psc31330', 2, 'Applied practicum methods and field preparation. Edit this module to add weekly topics, readings, and assignments.',               2),
-            ('Applied Research',           'psc31330', 3, 'Applied research projects and presentations. Add sessions, readings, and deliverables via the Airtable base.',                    3),
-        ]
-        for title, course, week_num, overview, order in mods:
-            modules_table.create({
-                'Title':       title,
-                'Course':      course,
-                'Week Number': week_num,
-                'Overview':    overview,
-                'Order Index': order,
-            })
-        report['modules'] = f'created {len(mods)}'
-
     # ── Resources ─────────────────────────────────────────────────────────────
     if resources_table.first(formula='{Is Active}=1'):
         report['resources'] = 'skipped'
