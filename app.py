@@ -102,7 +102,9 @@ def can_access_course(student_course):
 
 @app.route('/')
 def index():
-    return render_template('portal.html')
+    base = request.url_root.rstrip('/')
+    public_ics = f"{base}/api/calendar.ics?token={ICS_PUBLIC_TOKEN}"
+    return render_template('portal.html', public_ics_url=public_ics)
 
 
 # ── SEED API ─────────────────────────────────────────────────────────────────

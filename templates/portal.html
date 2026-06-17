@@ -177,13 +177,17 @@
      CALENDAR VIEW
 ════════════════════════════════════════ -->
 <div id="view-calendar" class="view">
+  <meta name="ics-url" content="{{ public_ics_url }}">
   <div class="page-hero">
     <div class="page-hero-inner">
       <div>
         <div class="page-hero-meta">PSC 31180 &mdash; Power, Politics, and Policy in NYC</div>
         <h1>Fall 2025 <strong>Course Calendar</strong></h1>
       </div>
-      <button class="btn-sm btn-primary admin-only" onclick="openAddForm(null)">+ Add event</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn-sm" onclick="openCalSubscribeModal()" title="Subscribe in Outlook, Google Calendar, or Apple Calendar">&#128197; Subscribe</button>
+        <button class="btn-sm btn-primary admin-only" onclick="openAddForm(null)">+ Add event</button>
+      </div>
     </div>
   </div>
   <div class="container">
@@ -893,6 +897,46 @@
     </div>
   </div>
 </footer>
+
+<!-- ── CALENDAR SUBSCRIBE MODAL ── -->
+<div class="modal-overlay" id="calSubscribeModal" onclick="if(event.target===this)closeCalSubscribeModal()">
+  <div class="modal-card" style="max-width:420px">
+    <div class="modal-header">
+      <span class="modal-title">&#128197; Subscribe to calendar</span>
+      <button class="modal-close" onclick="closeCalSubscribeModal()">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--gray-mid);margin-bottom:1.5rem">
+        Add the fellowship calendar to your preferred app. It stays in sync automatically — new events added to the portal appear within a few hours.
+      </p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <button class="cal-subscribe-btn" onclick="subscribeCalendar('google')">
+          <img src="https://www.gstatic.com/images/branding/product/1x/calendar_48dp.png" width="22" height="22" alt="" style="border-radius:4px">
+          <span>Google Calendar</span>
+        </button>
+        <button class="cal-subscribe-btn" onclick="subscribeCalendar('outlook')">
+          <span style="font-size:20px">&#128337;</span>
+          <span>Outlook (web)</span>
+        </button>
+        <button class="cal-subscribe-btn" onclick="subscribeCalendar('office365')">
+          <span style="font-size:20px">&#128336;</span>
+          <span>Office 365 / CCNY</span>
+        </button>
+        <button class="cal-subscribe-btn" onclick="subscribeCalendar('apple')">
+          <span style="font-size:20px">&#128222;</span>
+          <span>Apple Calendar</span>
+        </button>
+      </div>
+      <div style="margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--gray-border)">
+        <div style="font-size:11px;font-weight:600;color:var(--gray-mid);letter-spacing:0.05em;text-transform:uppercase;margin-bottom:6px">Or copy the feed URL</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="icsUrlDisplay" type="text" class="form-input" style="font-size:11px;font-family:monospace" readonly>
+          <button class="btn-sm" onclick="copyIcsUrl()" id="copyIcsBtn">Copy</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- ── CHANGE PASSWORD MODAL ── -->
 <div class="modal-overlay" id="changePasswordModal" onclick="handleModalOverlayClick(event)">

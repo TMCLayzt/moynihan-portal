@@ -1166,6 +1166,26 @@ footer {
 }
 .modal-close:hover { background: rgba(255,255,255,0.25); }
 .modal-body { padding: 1.5rem; }
+.cal-subscribe-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  border: 1.5px solid var(--gray-border);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gray-brand);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+.cal-subscribe-btn:hover {
+  border-color: var(--maroon);
+  background: #fdf8f8;
+}
 .modal-success {
   font-size: 13px; color: #085041; background: #E1F5EE;
   padding: 8px 12px; margin-bottom: 1rem; display: none;

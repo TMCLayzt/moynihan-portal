@@ -1905,6 +1905,47 @@ document.addEventListener('click', e => {
     dropdown.classList.remove('open');
 });
 
+// ── CALENDAR SUBSCRIBE MODAL ──────────────────────────────────────────────────
+
+function getIcsUrl() {
+  const meta = document.querySelector('meta[name="ics-url"]');
+  return meta ? meta.content : '';
+}
+
+function openCalSubscribeModal() {
+  const url = getIcsUrl();
+  const el = document.getElementById('icsUrlDisplay');
+  if (el) el.value = url;
+  document.getElementById('calSubscribeModal').classList.add('open');
+}
+
+function closeCalSubscribeModal() {
+  document.getElementById('calSubscribeModal').classList.remove('open');
+}
+
+function subscribeCalendar(provider) {
+  const icsUrl  = getIcsUrl();
+  const webcal  = icsUrl.replace(/^https?:/, 'webcal:');
+  const encoded = encodeURIComponent(icsUrl);
+  const name    = encodeURIComponent('Moynihan Center Fellowship');
+  const urls = {
+    google:    `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`,
+    outlook:   `https://outlook.live.com/calendar/0/addfromweb?url=${encoded}&name=${name}`,
+    office365: `https://outlook.office.com/calendar/addfromweb?url=${encoded}&name=${name}`,
+    apple:     webcal,
+  };
+  if (urls[provider]) window.open(urls[provider], '_blank');
+}
+
+function copyIcsUrl() {
+  const url = getIcsUrl();
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = document.getElementById('copyIcsBtn');
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+  });
+}
+
 function openChangePassword() {
   document.getElementById('userDropdown').classList.remove('open');
   ['cpCurrent','cpNew','cpConfirm'].forEach(id => document.getElementById(id).value = '');
