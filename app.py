@@ -21,8 +21,10 @@ app.secret_key = _secret
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)
 app.config['SESSION_REFRESH_EACH_REQUEST'] = True
 
-DEFAULT_PASSWORD = os.environ.get('DEFAULT_STUDENT_PASSWORD', 'moynihan2025')
-SETUP_KEY = os.environ.get('SETUP_KEY', 'moynihan-setup-2025')
+DEFAULT_PASSWORD  = os.environ.get('DEFAULT_STUDENT_PASSWORD', 'moynihan2025')
+SETUP_KEY         = os.environ.get('SETUP_KEY', 'moynihan-setup-2025')
+ICS_STAFF_TOKEN   = os.environ.get('ICS_STAFF_TOKEN',  'staff-cal-2025')
+ICS_PUBLIC_TOKEN  = os.environ.get('ICS_PUBLIC_TOKEN', 'moynihan-cal-2025')
 
 AIRTABLE_BASE_ID = os.environ.get('AIRTABLE_BASE_ID', 'appXXXXXXXXXXXXXX')
 
@@ -345,6 +347,119 @@ END:VCALENDAR"""
         ics,
         mimetype='text/calendar',
         headers={'Content-Disposition': f'attachment; filename="event-{event_id}.ics"'}
+    )
+
+
+@app.route('/api/calendar.ics')
+def calendar_feed():
+    """Live ICS calendar feed for Outlook/Google/Apple Calendar subscription.
+
+    ?token=<ICS_STAFF_TOKEN>   — all events including staff-only
+    ?token=<ICS_PUBLIC_TOKEN>  — all events except staff-only
+    &course=psc31180|psc31330  — optional course filter
+    """
+    token = request.args.get('token', '')
+    if token == ICS_STAFF_TOKEN:
+        include_staff_only = True
+    elif token == ICS_PUBLIC_TOKEN:
+        include_staff_only = False
+    else:
+        return Response('Unauthorized — missing or invalid token', status=401, mimetype='text/plain')
+
+    course_filter = request.args.get('course', '')
+
+    clauses = []
+    if not include_staff_only:
+        clauses.append('{Is Staff Only}!=1')
+    if course_filter:
+        clauses.append(f"OR({{Course}}='{course_filter}', {{Course}}='joint')")
+
+    if len(clauses) == 2:
+        formula = f'AND({clauses[0]}, {clauses[1]})'
+    elif clauses:
+        formula = clauses[0]
+    else:
+        formula = None
+
+    recs = events_table.all(formula=formula, sort=['Date']) if formula else events_table.all(sort=['Date'])
+
+    def ics_escape(text):
+        return (text or '').replace('\\', '\\\\').replace(';', '\\;').replace(',', '\\,').replace('\n', '\\n')
+
+    def ics_fold(line):
+        """Fold lines longer than 75 octets per RFC 5545."""
+        encoded = line.encode('utf-8')
+        if len(encoded) <= 75:
+            return line
+        out, buf = [], b''
+        for char in line:
+            c = char.encode('utf-8')
+            if len(buf) + len(c) > 75:
+                out.append(buf.decode('utf-8'))
+                buf = b' ' + c
+            else:
+                buf += c
+        if buf:
+            out.append(buf.decode('utf-8'))
+        return '\r\n'.join(out)
+
+    now_str = datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
+    cal_name = 'Moynihan Center Fellowship (Staff)' if include_staff_only else 'Moynihan Center Fellowship'
+
+    lines = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Moynihan Center//Fellowship Portal//EN',
+        'CALSCALE:GREGORIAN',
+        'METHOD:PUBLISH',
+        f'X-WR-CALNAME:{cal_name}',
+        'X-WR-TIMEZONE:America/New_York',
+    ]
+
+    for rec in recs:
+        f = rec['fields']
+        date_raw = (f.get('Date') or '').replace('-', '')
+        if not date_raw or len(date_raw) < 8:
+            continue
+        try:
+            from datetime import date as _date
+            y, mo, d = int(date_raw[:4]), int(date_raw[4:6]), int(date_raw[6:8])
+            dtend_str = (_date(y, mo, d) + timedelta(days=1)).strftime('%Y%m%d')
+        except Exception:
+            dtend_str = date_raw
+
+        summary  = ics_escape(f.get('Title', ''))
+        location = ics_escape((f.get('Note') or '').split('·')[0].strip())
+        desc     = ics_escape(f.get('Description') or f.get('Note') or '')
+        uid      = f"event-{rec['id']}@moynihan-portal"
+
+        vevent = [
+            'BEGIN:VEVENT',
+            f'UID:{uid}',
+            f'DTSTAMP:{now_str}',
+            f'DTSTART;VALUE=DATE:{date_raw}',
+            f'DTEND;VALUE=DATE:{dtend_str}',
+            f'SUMMARY:{summary}',
+        ]
+        if location:
+            vevent.append(f'LOCATION:{location}')
+        if desc:
+            vevent.append(f'DESCRIPTION:{desc}')
+        if f.get('Eventbrite URL'):
+            vevent.append(f"URL:{f['Eventbrite URL']}")
+        vevent.append('END:VEVENT')
+        lines.extend(vevent)
+
+    lines.append('END:VCALENDAR')
+    ics_body = '\r\n'.join(ics_fold(l) for l in lines) + '\r\n'
+
+    return Response(
+        ics_body,
+        mimetype='text/calendar; charset=utf-8',
+        headers={
+            'Content-Disposition': 'attachment; filename="moynihan-fellowship.ics"',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+        }
     )
 
 
