@@ -64,7 +64,7 @@
         <a class="subnav-link active" onclick="showView('dashboard')">Dashboard</a>
         <a class="subnav-link" onclick="showView('calendar')">Calendar</a>
         <a class="subnav-link" onclick="showView('modules')">Syllabus</a>
-        <a class="subnav-link" onclick="showView('finance')">Finance</a>
+        <a class="subnav-link" onclick="showView('finance')">Checklist</a>
         <a class="subnav-link admin-only" onclick="showView('forms')">Forms</a>
         <a class="subnav-link" onclick="showView('resources')">Resources</a>
         <a class="subnav-link" onclick="showView('about')">About</a>
@@ -263,16 +263,16 @@
   <div class="page-hero">
     <div class="page-hero-inner">
       <div>
-        <div class="page-hero-meta">Fellowship Finance &amp; Stipends</div>
-        <h1>Finance <strong>Checklist</strong></h1>
+        <div class="page-hero-meta">Fellowship Program</div>
+        <h1>Program <strong>Checklist</strong></h1>
       </div>
     </div>
   </div>
   <div class="container">
     <div class="section">
       <p style="font-size:14px;color:var(--gray-mid);max-width:600px;margin-bottom:2rem">
-        Track your required financial documents and deadlines. Check off each item as you complete it.
-        Your instructor manages this list — reach out if you have questions.
+        Track your required tasks and deadlines. Check off each item as you complete it.
+        Reach out to program staff with any questions.
       </p>
       <div id="financeProgress" style="max-width:500px;margin-bottom:2rem"></div>
       <div id="financeChecklist"></div>
@@ -508,7 +508,7 @@
     <button class="admin-tab" onclick="switchAdminTab('events')">Events</button>
     <button class="admin-tab" onclick="switchAdminTab('rsvps')">RSVPs</button>
     <button class="admin-tab" onclick="switchAdminTab('syllabus')">Syllabus</button>
-    <button class="admin-tab" onclick="switchAdminTab('finance')">Finance</button>
+    <button class="admin-tab" onclick="switchAdminTab('finance')">Checklist</button>
     <button class="admin-tab" onclick="switchAdminTab('resources')">Resources</button>
     <button class="admin-tab" onclick="switchAdminTab('forms')">Forms</button>
     <button class="admin-tab" onclick="switchAdminTab('students')">Students</button>
@@ -566,6 +566,7 @@
           <div class="form-group"><label class="form-label">Category</label>
             <select class="form-input" id="ev-cat">
               <option value="lecture">Lecture / class</option>
+              <option value="meeting">Meeting / check-in</option>
               <option value="guest">Guest speaker</option>
               <option value="homework">Homework deadline</option>
               <option value="milestone">Student milestone</option>
@@ -636,8 +637,8 @@
     <div class="admin-panel" id="apanel-finance">
       <div class="admin-section-header">
         <div>
-          <div class="admin-section-title">Finance checklist</div>
-          <div class="admin-section-sub">Add items students need to complete — W-2s, FAFSA deadlines, stipend forms, etc. Students check off each item.</div>
+          <div class="admin-section-title">Program checklist</div>
+          <div class="admin-section-sub">Add tasks students need to complete — finance forms, surveys, general requirements, etc. Students check off each item.</div>
         </div>
       </div>
       <div class="admin-form-card">
@@ -646,11 +647,9 @@
           <div class="form-group"><label class="form-label">Title</label><input class="form-input" id="fin-title" type="text" placeholder="e.g. Submit W-2 form"></div>
           <div class="form-group"><label class="form-label">Category</label>
             <select class="form-input" id="fin-cat">
-              <option value="document">Documents</option>
-              <option value="deadline">Deadlines</option>
-              <option value="stipend">Stipend</option>
-              <option value="fafsa">FAFSA</option>
-              <option value="other">Other</option>
+              <option value="finance">Finance</option>
+              <option value="survey">Survey / form</option>
+              <option value="general">General</option>
             </select>
           </div>
         </div>
@@ -658,13 +657,14 @@
           <div class="form-group"><label class="form-label">Description <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label><input class="form-input" id="fin-desc" type="text" placeholder="Short explanation or instructions"></div>
           <div class="form-group"><label class="form-label">Due date / label <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label><input class="form-input" id="fin-due" type="text" placeholder="e.g. Oct 15 or Before stipend disbursement"></div>
         </div>
+        <div class="form-group"><label class="form-label">Link <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional — e.g. Calendly, Google Form)</span></label><input class="form-input" id="fin-link" type="url" placeholder="https://..."></div>
         <div class="form-group" style="display:flex;align-items:center;gap:10px">
           <input type="checkbox" id="fin-required" checked style="width:16px;height:16px;accent-color:var(--maroon)">
           <label for="fin-required" class="form-label" style="margin:0;cursor:pointer">Mark as required</label>
         </div>
         <button class="admin-btn-primary" onclick="addFinanceItem()">Add item</button>
       </div>
-      <div class="admin-section-title" style="margin-top:2rem;margin-bottom:1rem">Finance items</div>
+      <div class="admin-section-title" style="margin-top:2rem;margin-bottom:1rem">Checklist items</div>
       <div id="adminFinanceList"></div>
     </div>
 

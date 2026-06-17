@@ -6,3 +6,4 @@ __pycache__/
 *.pyc
 .env
 airtable_setup.py
+migrate_checklist.py

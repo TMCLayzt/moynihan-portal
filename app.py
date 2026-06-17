@@ -604,6 +604,9 @@ def _finance_item_to_dict(rec):
         'id':          rec['id'],
         'title':       d.get('Title', ''),
         'description': d.get('Description', ''),
+        'category':    d.get('Category', 'general'),
+        'link':        d.get('Link', ''),
+        'due_label':   d.get('Due Label', ''),
         'is_required': 1 if d.get('Is Required') else 0,
         'order_index': d.get('Order Index', 0),
     }
@@ -637,14 +640,23 @@ def create_finance_item():
     data = request.get_json(silent=True) or {}
     title       = (data.get('title') or '').strip()
     description = data.get('description', '')
+    category    = data.get('category', 'general')
+    link        = (data.get('link') or '').strip()
+    due_label   = (data.get('due_label') or '').strip()
     is_required = bool(data.get('is_required', True))
     if not title:
         return jsonify({'error': 'Title required'}), 400
-    rec = finance_items_table.create({
+    fields = {
         'Title':       title,
         'Description': description,
+        'Category':    category,
         'Is Required': is_required,
-    })
+    }
+    if link:
+        fields['Link'] = link
+    if due_label:
+        fields['Due Label'] = due_label
+    rec = finance_items_table.create(fields)
     return jsonify(_finance_item_to_dict(rec)), 201
 
 
@@ -1107,22 +1119,30 @@ def seed_content():
         report['finance_items'] = 'skipped'
     else:
         items = [
-            ('Complete fellowship onboarding paperwork',  'Download, fill out, and submit all required onboarding documents to the Moynihan Center office.',                    True,  1),
-            ('Sign participation agreement',              'Read and sign the fellowship participation agreement acknowledging program expectations and responsibilities.',        True,  2),
-            ('Set up CUNY direct deposit',               'Log into CUNYfirst and complete direct deposit setup so your stipend is deposited to the correct account.',           True,  3),
-            ('Submit W-9 tax form',                      'Submit a completed W-9 form to the financial office. Required for stipend processing.',                              True,  4),
-            ('Attend fellowship orientation',             'Attend the mandatory fellowship orientation session to meet staff, other fellows, and learn program expectations.',   True,  5),
-            ('Submit mid-year reflection form',           'Complete and submit the mid-year reflection form by the posted deadline.',                                           True,  6),
-            ('Submit end-of-year final report',          'Complete and submit your final fellowship report summarizing your work and learning over the year.',                  True,  7),
-            ('Return any borrowed program materials',     'Return all borrowed equipment, keys, or materials to the Moynihan Center by the end of the fellowship term.',        False, 8),
+            # (title, description, category, link, due_label, required, order)
+            ('Complete fellowship onboarding paperwork',  'Download, fill out, and submit all required onboarding documents to the Moynihan Center office.',                    'finance', '', '',  True,  1),
+            ('Sign participation agreement',              'Read and sign the fellowship participation agreement acknowledging program expectations and responsibilities.',        'finance', '', '',  True,  2),
+            ('Set up CUNY direct deposit',               'Log into CUNYfirst and complete direct deposit setup so your stipend is deposited to the correct account.',           'finance', '', '',  True,  3),
+            ('Submit W-9 tax form',                      'Submit a completed W-9 form to the financial office. Required for stipend processing.',                              'finance', '', '',  True,  4),
+            ('Complete onboarding survey',               'Fill out the onboarding survey so we can learn about your goals and background.',                                    'survey',  '', '',  True,  5),
+            ('Submit mid-year reflection',               'Complete the mid-year reflection form by the posted deadline.',                                                       'survey',  '', '',  True,  6),
+            ('Submit end-of-year final report',          'Complete your final fellowship report summarizing your work and learning over the year.',                             'survey',  '', '',  True,  7),
+            ('Attend fellowship orientation',             'Attend the mandatory orientation session to meet staff, other fellows, and learn program expectations.',             'general', '', '',  True,  8),
+            ('Return any borrowed program materials',     'Return all borrowed equipment, keys, or materials to the Moynihan Center by the end of the fellowship term.',        'general', '', '',  False, 9),
         ]
-        for title, desc, req, idx in items:
-            finance_items_table.create({
+        for title, desc, cat, link, due_label, req, idx in items:
+            fields = {
                 'Title':       title,
                 'Description': desc,
+                'Category':    cat,
                 'Is Required': req,
                 'Order Index': idx,
-            })
+            }
+            if link:
+                fields['Link'] = link
+            if due_label:
+                fields['Due Label'] = due_label
+            finance_items_table.create(fields)
         report['finance_items'] = f'created {len(items)}'
 
     # ── Events ────────────────────────────────────────────────────────────────

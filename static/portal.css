@@ -25,6 +25,8 @@
   --c-guest-bg: #E6F1FB;
   --c-milestone: #BA7517;
   --c-milestone-bg: #FAEEDA;
+  --c-meeting: #7B3D8F;
+  --c-meeting-bg: #F3EAF8;
 }
 
 body {
@@ -1529,6 +1531,16 @@ body:not(.student-mode) .student-only { display: none !important; }
 .finance-item-title { font-size: 14px; font-weight: 600; color: var(--gray-brand); }
 .finance-item-desc  { font-size: 12px; color: var(--gray-mid); margin-top: 3px; }
 .finance-item-due   { font-size: 11px; font-weight: 600; color: #D85A30; margin-top: 4px; }
+.checklist-open-link {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--maroon);
+  text-decoration: none;
+  letter-spacing: 0.02em;
+}
+.checklist-open-link:hover { text-decoration: underline; text-underline-offset: 3px; }
 
 /* ── RESOURCES ───────────────────────────────────────────────────────────── */
 .resource-nav-link {

@@ -2,11 +2,12 @@
 
 const CATS = [
   { id:'lecture',     label:'Lecture / class',     color:'#8B1A1A', bg:'#f5e8e8' },
-  { id:'reading',     label:'Reading / prep',       color:'#1D9E75', bg:'#E1F5EE' },
-  { id:'homework',    label:'Homework deadline',    color:'#D85A30', bg:'#FAECE7' },
-  { id:'application', label:'Application deadline', color:'#A32D2D', bg:'#FCEBEB' },
-  { id:'guest',       label:'Guest speaker',        color:'#185FA5', bg:'#E6F1FB' },
-  { id:'milestone',   label:'Student milestone',    color:'#BA7517', bg:'#FAEEDA' },
+  { id:'meeting',     label:'Meeting / check-in',  color:'#7B3D8F', bg:'#F3EAF8' },
+  { id:'reading',     label:'Reading / prep',      color:'#1D9E75', bg:'#E1F5EE' },
+  { id:'homework',    label:'Homework deadline',   color:'#D85A30', bg:'#FAECE7' },
+  { id:'application', label:'Application deadline',color:'#A32D2D', bg:'#FCEBEB' },
+  { id:'guest',       label:'Guest speaker',       color:'#185FA5', bg:'#E6F1FB' },
+  { id:'milestone',   label:'Student milestone',   color:'#BA7517', bg:'#FAEEDA' },
 ];
 const CAT = {};
 CATS.forEach(c => CAT[c.id] = c);
@@ -1698,25 +1699,27 @@ function renderFinance() {
   }
 
   if (!financeItems.length) {
-    el.innerHTML = `<div style="font-size:13px;color:var(--gray-mid);padding:2rem 0;text-align:center">No finance items have been added yet.<br><span style="font-size:12px">Your instructor will add W-2s, stipend info, and FAFSA reminders here.</span></div>`;
+    el.innerHTML = `<div style="font-size:13px;color:var(--gray-mid);padding:2rem 0;text-align:center">No checklist items have been added yet.<br><span style="font-size:12px">Program staff will add tasks here.</span></div>`;
     return;
   }
 
-  const cats = [...new Set(financeItems.map(i => i.category))];
+  const CAT_LABELS = { finance: 'Finance', survey: 'Survey / Form', general: 'General' };
+  const cats = [...new Set(financeItems.map(i => i.category || 'general'))];
   el.innerHTML = cats.map(cat => {
-    const items = financeItems.filter(i => i.category === cat);
+    const items = financeItems.filter(i => (i.category || 'general') === cat);
     return `<div class="finance-cat-group">
-      <div class="finance-cat-label">${cat.charAt(0).toUpperCase() + cat.slice(1)}</div>
+      <div class="finance-cat-label">${CAT_LABELS[cat] || cat.charAt(0).toUpperCase() + cat.slice(1)}</div>
       ${items.map(item => {
         const checked = financeChecked.has(item.id);
         return `<div class="finance-item${checked?' checked':''}">
-          <button class="finance-checkbox${checked?' checked':''}" onclick="toggleFinanceCheck(${item.id})" title="${checked?'Mark incomplete':'Mark complete'}">
+          <button class="finance-checkbox${checked?' checked':''}" onclick="toggleFinanceCheck('${item.id}')" title="${checked?'Mark incomplete':'Mark complete'}">
             ${checked ? '&#10003;' : ''}
           </button>
           <div class="finance-item-body">
-            <div class="finance-item-title">${item.title}${item.is_required?` <span class="badge-mandatory">Required</span>`:''}</div>
-            ${item.description ? `<div class="finance-item-desc">${item.description}</div>` : ''}
-            ${item.due_label ? `<div class="finance-item-due">Due: ${item.due_label}</div>` : ''}
+            <div class="finance-item-title">${escHtml(item.title)}${item.is_required?` <span class="badge-mandatory">Required</span>`:''}</div>
+            ${item.description ? `<div class="finance-item-desc">${escHtml(item.description)}</div>` : ''}
+            ${item.due_label ? `<div class="finance-item-due">Due: ${escHtml(item.due_label)}</div>` : ''}
+            ${item.link ? `<a href="${escHtml(item.link)}" target="_blank" rel="noopener" class="checklist-open-link">Open &#8599;</a>` : ''}
           </div>
         </div>`;
       }).join('')}
@@ -1741,18 +1744,18 @@ function renderAdminFinance() {
   const el = document.getElementById('adminFinanceList');
   if (!el) return;
   if (!financeItems.length) {
-    el.innerHTML = '<p style="color:var(--gray-mid);font-size:13px;padding:1rem 0">No finance items yet. Add W-2 reminders, FAFSA deadlines, stipend info, etc.</p>';
+    el.innerHTML = '<p style="color:var(--gray-mid);font-size:13px;padding:1rem 0">No checklist items yet. Add finance tasks, surveys, or general requirements above.</p>';
     return;
   }
   el.innerHTML = financeItems.map(item => `
     <div class="admin-list-row">
       <div class="admin-list-accent" style="background:var(--maroon)"></div>
       <div class="admin-list-body">
-        <div class="admin-list-title">${item.title}${item.is_required?` <span class="badge-mandatory">Required</span>`:''}</div>
-        <div class="admin-list-meta">${item.category}${item.due_label?' · Due: '+item.due_label:''}${item.description?' · '+item.description.slice(0,60):''}</div>
+        <div class="admin-list-title">${escHtml(item.title)}${item.is_required?` <span class="badge-mandatory">Required</span>`:''}</div>
+        <div class="admin-list-meta">${item.category || 'general'}${item.due_label?' · Due: '+escHtml(item.due_label):''}${item.link?' · <a href="'+escHtml(item.link)+'" target="_blank" rel="noopener">Link ↗</a>':''}${item.description?' · '+escHtml(item.description.slice(0,60)):''}</div>
       </div>
       <div class="admin-list-actions">
-        <button class="admin-btn-danger" onclick="deleteFinanceItem(${item.id})">Delete</button>
+        <button class="admin-btn-danger" onclick="deleteFinanceItem('${item.id}')">Delete</button>
       </div>
     </div>`).join('');
 }
@@ -1762,9 +1765,10 @@ async function addFinanceItem() {
   const description = document.getElementById('fin-desc').value.trim();
   const due_label   = document.getElementById('fin-due').value.trim();
   const category    = document.getElementById('fin-cat').value;
+  const link        = document.getElementById('fin-link').value.trim();
   const is_required = document.getElementById('fin-required').checked;
   if (!title) return;
-  const res = await api('POST', '/api/finance', { title, description, due_label, category, is_required });
+  const res = await api('POST', '/api/finance', { title, description, due_label, category, link, is_required });
   if (res.ok) {
     const data = await res.json();
     data.checked = false;
@@ -1772,6 +1776,7 @@ async function addFinanceItem() {
     document.getElementById('fin-title').value = '';
     document.getElementById('fin-desc').value  = '';
     document.getElementById('fin-due').value   = '';
+    document.getElementById('fin-link').value  = '';
     renderAdminFinance();
   }
 }
