@@ -37,6 +37,7 @@ const ANN_CATS = {
   info:     { label:'Info',     border:'#185FA5', bg:'#E6F1FB' },
   deadline: { label:'Deadline', border:'#D85A30', bg:'#FAECE7' },
   reminder: { label:'Reminder', border:'#BA7517', bg:'#FAEEDA' },
+  event:    { label:'Event',    border:'#20785C', bg:'#E3F0EB' },
   // backwards compat with old color-named entries
   maroon: { label:'General',  border:'#8B1A1A', bg:'#f5e8e8' },
   blue:   { label:'Info',     border:'#185FA5', bg:'#E6F1FB' },
@@ -169,7 +170,6 @@ let calMonth = _now.getMonth();
 
 let panelMode = null, selectedDate = null;
 let eventsFilter    = 'all';
-let annWeekFilter   = '';
 let dashWindow      = 'month'; // 'week' | 'month' | 'all'
 
 
@@ -608,20 +608,17 @@ function setDashWindow(w) {
 function renderDashboardAnnouncements() {
   const el = document.getElementById('dashboardAnnouncements');
   if (!el) return;
-  // Filter by week if set
-  let visible = announcements;
-  if (annWeekFilter) {
-    visible = announcements.filter(a => !a.week_tag || a.week_tag === annWeekFilter);
-  }
+  // Expired announcements reach staff but are never shown here.
+  const visible = announcements.filter(a => !expiredAnnouncement(a));
   el.innerHTML = `<div class="section-label">Announcements</div>` +
     (visible.length
       ? visible.map(a => {
           const c = ANN_CATS[a.category] || ANN_CATS.general;
-          const weekLabel = a.week_tag ? `<span class="ann-week-badge">Week ${a.week_tag}</span>` : '';
+          const pin = a.is_pinned ? `<span class="ann-cat-label" style="color:${c.border}">★ Pinned</span>` : '';
           return `<div class="announcement" style="border-left-color:${c.border};background:${c.bg}">
             <div class="ann-meta-row">
               <span class="ann-cat-label" style="color:${c.border}">${c.label}</span>
-              ${weekLabel}
+              ${pin}
             </div>
             <div class="announcement-title">${a.title}</div>
             <div class="announcement-body">${a.body}</div>
@@ -643,11 +640,15 @@ function renderAdminAnnouncements() {
     return `<div class="admin-list-row">
       <div class="admin-list-accent" style="background:${c.border}"></div>
       <div class="admin-list-body">
-        <div class="admin-list-title">${a.title}${a.week_tag ? ` <span class="ann-week-badge">Week ${a.week_tag}</span>` : ''}</div>
+        <div class="admin-list-title">${a.is_pinned ? '★ ' : ''}${a.title}</div>
         <div class="admin-list-meta">${a.body.slice(0,90)}${a.body.length>90?'…':''}</div>
+        ${a.show_until ? `<div class="admin-list-meta" style="margin-top:4px">${
+            expiredAnnouncement(a) ? `<span style="color:#A32D2D">Expired ${a.show_until} — no longer on the homepage</span>`
+                                   : `Shows until ${a.show_until}`}</div>` : ''}
       </div>
-      <div class="admin-list-actions">
+      <div class="admin-list-actions" style="gap:6px">
         <span class="badge" style="background:${c.bg};color:${c.border};font-size:10px">${c.label}</span>
+        <button class="admin-btn-secondary" style="padding:5px 10px;font-size:10px" onclick="togglePinAnnouncement('${a.id}')">${a.is_pinned ? '★ Pinned' : '☆ Pin'}</button>
         <button class="admin-btn-danger" onclick="deleteAnnouncement('${a.id}')">Delete</button>
       </div>
     </div>`;
@@ -658,18 +659,43 @@ async function addAnnouncement() {
   const title    = document.getElementById('ann-title').value.trim();
   const body     = document.getElementById('ann-body').value.trim();
   const color    = document.getElementById('ann-color').value;
-  const week_tag = document.getElementById('ann-week').value.trim();
+  const show_until = document.getElementById('ann-until').value;
+  const is_pinned  = document.getElementById('ann-pinned').checked;
   if (!title || !body) return;
-  const res = await api('POST', '/api/announcements', { title, body, color, week_tag });
+  const res = await api('POST', '/api/announcements', { title, body, color, show_until, is_pinned });
   if (res.ok) {
     const data = await res.json();
     announcements.unshift(data);
     document.getElementById('ann-title').value = '';
     document.getElementById('ann-body').value  = '';
-    document.getElementById('ann-week').value  = '';
+    document.getElementById('ann-until').value  = '';
+    document.getElementById('ann-pinned').checked = false;
     renderAdminAnnouncements();
     renderDashboardAnnouncements();
   }
+}
+
+/* Staff receive expired announcements too, so they can see and manage them;
+   fellows never do. */
+function expiredAnnouncement(a) {
+  if (!a.show_until) return false;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const [y,m,d] = a.show_until.slice(0,10).split('-').map(Number);
+  return new Date(y, m-1, d) < today;
+}
+
+async function togglePinAnnouncement(id) {
+  const a = announcements.find(x => x.id === id);
+  if (!a) return;
+  const res = await api('PATCH', `/api/announcements/${id}`, { is_pinned: a.is_pinned ? 0 : 1 });
+  if (!res.ok) return;
+  const data = await res.json();
+  const idx = announcements.findIndex(x => x.id === id);
+  if (idx > -1) announcements[idx] = data;
+  // Pinned first, then leave the existing order alone.
+  announcements.sort((x, y) => (y.is_pinned ? 1 : 0) - (x.is_pinned ? 1 : 0));
+  renderAdminAnnouncements();
+  renderDashboardAnnouncements();
 }
 
 async function deleteAnnouncement(id) {

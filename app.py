@@ -330,8 +330,21 @@ def announcement_to_dict(rec):
         'title':      d.get('Title', ''),
         'body':       d.get('Body', ''),
         'category':   d.get('Category', 'general'),
+        'show_until': d.get('Show Until', ''),
+        'is_pinned':  1 if d.get('Is Pinned') else 0,
         'created_at': d.get('Created At', ''),
     }
+
+
+def announcement_is_current(rec):
+    """Has this announcement passed its Show Until date? Blank means never."""
+    until = rec['fields'].get('Show Until')
+    if not until:
+        return True
+    try:
+        return date.fromisoformat(until[:10]) >= date.today()
+    except ValueError:
+        return True
 
 
 def resource_to_dict(rec):
@@ -704,6 +717,10 @@ def download_event_ics(event_id):
 @login_required
 def get_announcements():
     recs = announcements_table.all(sort=['-Created At'])
+    if not is_staff():
+        recs = [r for r in recs if announcement_is_current(r)]
+    # Pinned first, then newest. Sort is stable, so the date order survives.
+    recs.sort(key=lambda r: 0 if r['fields'].get('Is Pinned') else 1)
     return jsonify([announcement_to_dict(r) for r in recs])
 
 
@@ -719,9 +736,31 @@ def create_announcement():
         'Title':      title,
         'Body':       body,
         'Category':   data.get('category', 'general'),
+        'Show Until': (data.get('show_until') or '') or None,
+        'Is Pinned':  bool(data.get('is_pinned')),
         'Created At': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.000Z'),
-    })
+    }, typecast=True)
     return jsonify(announcement_to_dict(rec)), 201
+
+
+@app.route('/api/announcements/<string:ann_id>', methods=['PATCH'])
+@staff_required
+def update_announcement(ann_id):
+    data = request.get_json(silent=True) or {}
+    if not announcements_table.get(ann_id):
+        return jsonify({'error': 'Not found'}), 404
+    updates = {}
+    for key, at_key in (('title', 'Title'), ('body', 'Body'), ('category', 'Category')):
+        if key in data:
+            updates[at_key] = data[key]
+    if 'show_until' in data:
+        updates['Show Until'] = (data['show_until'] or '') or None
+    if 'is_pinned' in data:
+        updates['Is Pinned'] = bool(data['is_pinned'])
+    if not updates:
+        return jsonify({'error': 'Nothing to update.'}), 400
+    return jsonify(announcement_to_dict(
+        announcements_table.update(ann_id, updates, typecast=True)))
 
 
 @app.route('/api/announcements/<string:ann_id>', methods=['DELETE'])

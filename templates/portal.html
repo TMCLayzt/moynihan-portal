@@ -416,13 +416,21 @@
               <option value="info">Info</option>
               <option value="deadline">Deadline</option>
               <option value="reminder">Reminder</option>
+              <option value="event">Event</option>
             </select>
           </div>
         </div>
         <div class="form-group"><label class="form-label">Body</label><textarea class="form-input" id="ann-body" rows="3" placeholder="Write your announcement…"></textarea></div>
-        <div class="form-group" style="max-width:200px">
-          <label class="form-label">Week number <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional, e.g. 3)</span></label>
-          <input class="form-input" id="ann-week" type="text" placeholder="e.g. 3">
+        <div class="admin-row-2">
+          <div class="form-group">
+            <label class="form-label">Show until <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
+            <input class="form-input" id="ann-until" type="date">
+            <div style="font-size:11px;color:var(--gray-mid);margin-top:5px">After this date it drops off the homepage. Leave blank to keep it up.</div>
+          </div>
+          <div class="form-group" style="display:flex;align-items:center;gap:10px;padding-top:1.4rem">
+            <input type="checkbox" id="ann-pinned" style="width:16px;height:16px;accent-color:var(--maroon)">
+            <label for="ann-pinned" class="form-label" style="margin:0;cursor:pointer">Pin to top</label>
+          </div>
         </div>
         <button class="admin-btn-primary" onclick="addAnnouncement()">Post announcement</button>
       </div>
