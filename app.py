@@ -339,6 +339,13 @@ def event_to_dict(rec):
     }
 
 
+# Only the standing weekly commitments block time in a subscribed calendar.
+# Everything else — talks, receptions, workshops, college dates — appears at its
+# proper time but leaves the fellow showing as free, since attendance varies by
+# cohort and much of it is optional.
+TIME_BLOCKING_CATEGORIES = ('lecture', 'senior_seminar')
+
+
 # Events students must never receive: staff-only, or still hidden as a draft.
 STUDENT_EVENT_CLAUSES = ['{Is Staff Only}!=1', '{Is Hidden}!=1']
 
@@ -739,24 +746,18 @@ def build_ics(recs, cal_name):
             f"SUMMARY:{ics_escape(f.get('Title', ''))}",
         ]
 
-        # Free/busy. Without this, RFC 5545 defaults to OPAQUE and an all-day
-        # entry marks the whole day busy — so a college closure would make a
-        # fellow look unavailable to anyone checking their calendar. Sessions
-        # they're expected to attend should block time; notices should not.
+        # Free/busy. Without an explicit TRANSP, RFC 5545 defaults to OPAQUE and
+        # everything would mark the fellow busy — including college closures and
+        # talks they may not attend. Only the weekly seminars block time.
         # The X-MICROSOFT lines are for Outlook, which favours its own over
         # TRANSP when working out free/busy.
-        if timed:
-            lines += [
-                'TRANSP:OPAQUE',
-                'X-MICROSOFT-CDO-BUSYSTATUS:BUSY',
-            ]
+        blocks = f.get('Category') in TIME_BLOCKING_CATEGORIES
+        if blocks:
+            lines += ['TRANSP:OPAQUE', 'X-MICROSOFT-CDO-BUSYSTATUS:BUSY']
         else:
-            lines += [
-                'TRANSP:TRANSPARENT',
-                'X-MICROSOFT-CDO-BUSYSTATUS:FREE',
-                'X-MICROSOFT-CDO-ALLDAYEVENT:TRUE',
-                'X-FUNAMBOL-ALLDAY:1',
-            ]
+            lines += ['TRANSP:TRANSPARENT', 'X-MICROSOFT-CDO-BUSYSTATUS:FREE']
+        if not timed:
+            lines += ['X-MICROSOFT-CDO-ALLDAYEVENT:TRUE', 'X-FUNAMBOL-ALLDAY:1']
         location = ics_escape((f.get('Note') or '').split('·')[0].strip())
         if location:
             lines.append(f'LOCATION:{location}')
