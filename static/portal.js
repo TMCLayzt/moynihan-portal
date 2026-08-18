@@ -9,8 +9,8 @@ const CATS = [
   { id:'guest',       label:'Guest speaker',       color:'#185FA5', bg:'#E6F1FB' },
   { id:'milestone',   label:'Events',              color:'#BA7517', bg:'#FAEEDA' },
   // CUNY academic calendar, not fellowship programming
-  { id:'academic',    label:'CUNY academic date',  color:'#4A5568', bg:'#EDF2F7' },
-  { id:'closed',      label:'No classes / closed', color:'#7A7A7A', bg:'#F0F0F0' },
+  { id:'academic',    label:'CUNY academic date',  color:'#3D5A80', bg:'#E8EEF5' },
+  { id:'closed',      label:'No classes / closed', color:'#6E6E73', bg:'#EDEDEE' },
   { id:'general',     label:'Other',               color:'#6b6b6b', bg:'#f4f3f0' },
 ];
 const CAT = {};
@@ -484,8 +484,8 @@ function renderDashboard() {
     ? `<div style="font-size:13px;color:var(--gray-mid);padding:1rem 0">No deadlines ${dashWindow==='week'?'this week':dashWindow==='month'?'this month':'coming up'}.</div>`
     : dueSoon.map(e => {
         const cat = catOf(e.cat);
-        const cc  = courseColor(e.course);
-        const cl  = courseLabel(e.course);
+        const cc  = accentColor(e);
+        const cl  = courseBadge(e);
         const [yr,mo,dy] = e.date.split('-').map(Number);
         const eDate   = new Date(yr, mo-1, dy);
         const diffDays = Math.round((eDate - today) / 86400000);
@@ -539,7 +539,7 @@ function renderDashboard() {
     ? `<div style="padding:1.5rem;font-size:13px;color:var(--gray-mid)">No upcoming sessions.</div>`
     : upcomingEvs.map(e => {
         const cat     = catOf(e.cat);
-        const cc      = courseColor(e.course);
+        const cc      = accentColor(e);
         const isJoint = e.course === 'joint';
         const [yr,mo,dy] = e.date.split('-').map(Number);
         const mon     = MONTHS_FULL[mo-1].slice(0,3).toUpperCase();
@@ -756,18 +756,18 @@ function renderAdminEvents(filter) {
   }
   list.innerHTML = filtered.map(e => {
     const cat = catOf(e.cat);
-    const cc  = courseColor(e.course);
-    const cl  = courseLabel(e.course);
+    const cc  = accentColor(e);
+    const cl  = courseBadge(e);
     const [yr,mo,dy] = e.date.split('-').map(Number);
     const mon = MONTHS_FULL[mo-1].slice(0,3).toUpperCase();
     return `<div class="admin-list-row" style="${e.hidden?'opacity:0.5':''}">
-      <div class="admin-list-accent" style="background:${e.locked?'#ccc':cat.color}"></div>
+      <div class="admin-list-accent" style="background:${pillColors(e).color}"></div>
       <div style="min-width:48px;text-align:center;flex-shrink:0">
         <div style="font-size:1.2rem;font-weight:700;line-height:1;color:var(--gray-brand)">${dy}</div>
         <div style="font-size:9px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--gray-mid)">${mon}</div>
       </div>
       <div class="admin-list-body">
-        <div class="admin-list-title" style="${e.locked?'text-decoration:line-through':''}">
+        <div class="admin-list-title">
           ${e.title}
           ${e.mandatory ? `<span class="badge-mandatory" style="margin-left:6px">Required</span>` : ''}
           ${e.staffOnly ? `<span class="badge" style="background:#F3EAF8;color:#7B3D8F;font-size:10px;margin-left:4px">Staff only</span>` : ''}
@@ -908,6 +908,33 @@ function courseLabel(course) {
   return '';
 }
 
+/* CUNY academic dates and closures are tagged Course='joint' so they reach
+   everyone, but they aren't fellowship programming. Showing them with the joint
+   accent — the same amber as the Events category — filed them visually with the
+   programme. They carry their own colour instead, and no course badge, since
+   "Joint" wrongly implies a joint event. */
+function isInstitutional(cat) {
+  return cat === 'academic' || cat === 'closed';
+}
+
+function accentColor(e) {
+  return isInstitutional(e.cat) ? catOf(e.cat).color : courseColor(e.course);
+}
+
+function courseBadge(e) {
+  return isInstitutional(e.cat) ? '' : courseLabel(e.course);
+}
+
+/* A seminar's identity is its course, not the generic "lecture" category — both
+   years' seminars are lectures, so category colour made them indistinguishable.
+   Everything else is coloured by what kind of thing it is. */
+function pillColors(e) {
+  const c = COURSES[e.course];
+  if (e.cat === 'lecture' && c) return { color: c.color, bg: c.bg };
+  const cat = catOf(e.cat);
+  return { color: cat.color, bg: cat.bg };
+}
+
 function getVisibleEvents() {
   let evs;
   if      (calFilterCourse === 'all')      evs = ALL_EVENTS;
@@ -998,9 +1025,10 @@ function renderCalendar() {
     const maxShow = 2;
     const pills = evs.slice(0,maxShow).map(e => {
       const cat = catOf(e.cat);
-      const cc  = courseColor(e.course);
-      return `<span class="cal-pill" style="background:${e.locked?'#f0f0f0':cat.bg};color:${e.locked?'#999':cat.color};border-left:2px solid ${e.locked?'#ccc':cc};${e.locked?'text-decoration:line-through':''}">
-        ${e.hidden?'[hidden] ':''}${e.locked?'🔒 ':''}${e.mandatory?'★ ':''}${e.title}
+      const cc  = accentColor(e);
+      const pc = pillColors(e);
+      return `<span class="cal-pill" style="background:${pc.bg};color:${pc.color};border-left:2px solid ${cc}">
+        ${e.hidden?'[hidden] ':''}${e.mandatory?'★ ':''}${e.title}
       </span>`;
     }).join('');
     const more = evs.length > maxShow ? `<span class="cal-more">+${evs.length-maxShow} more</span>` : '';
@@ -1065,11 +1093,10 @@ function renderDayBody(dateStr) {
   }
   body.innerHTML = `<div class="panel-event-list">${evs.map(e => {
     const cat   = catOf(e.cat);
-    const cc    = courseColor(e.course);
-    const cl    = courseLabel(e.course);
+    const cc    = accentColor(e);
+    const cl    = courseBadge(e);
     const adminBadges = !isStudentMode ? `
       ${e.hidden ? `<span class="admin-status-chip" style="background:#333;color:#ccc;margin-right:4px">Hidden</span>` : ''}
-      ${e.locked ? `<span class="admin-status-chip" style="background:#FAECE7;color:#D85A30;margin-right:4px">🔒 Locked</span>` : ''}
     ` : '';
     const mandatoryBadge = e.mandatory  ? `<span class="badge-mandatory" style="margin-left:4px">Required</span>` : '';
     const staffOnlyBadge = e.staffOnly  ? `<span class="badge" style="background:#F3EAF8;color:#7B3D8F;font-size:10px;margin-left:4px">Staff only</span>` : '';
@@ -1077,9 +1104,9 @@ function renderDayBody(dateStr) {
     const ebBtn   = e.eventbrite_url ? `<a href="${e.eventbrite_url}" target="_blank" rel="noopener" class="btn-sm btn-primary" style="margin-top:8px;font-size:11px;display:inline-flex;align-items:center;gap:5px;text-decoration:none">🎟 RSVP / Register ↗</a>` : '';
     const descHtml = e.description ? `<div class="panel-event-desc">${e.description}</div>` : '';
     return `<div class="panel-event-item" style="${e.hidden&&!isStudentMode?'opacity:0.6':''}">
-      <div class="panel-event-accent" style="background:${e.locked?'#ccc':cat.color}"></div>
+      <div class="panel-event-accent" style="background:${pillColors(e).color}"></div>
       <div class="panel-event-content">
-        <div class="panel-event-cat" style="color:${cat.color}">${cat.label}${cl?`<span class="course-badge" style="background:${cc}22;color:${cc}">${cl}</span>`:''}${mandatoryBadge}${staffOnlyBadge}</div>
+        <div class="panel-event-cat" style="color:${pillColors(e).color}">${cat.label}${cl?`<span class="course-badge" style="background:${cc}22;color:${cc}">${cl}</span>`:''}${mandatoryBadge}${staffOnlyBadge}</div>
         <div class="panel-event-title">${e.title}</div>
         ${adminBadges}
         ${e.note ? `<div class="panel-event-note">${e.note}</div>` : ''}
