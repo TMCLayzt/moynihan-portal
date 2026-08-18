@@ -104,6 +104,23 @@ const COURSES = {
   },
 };
 
+/* Audience tags, as distinct from a cohort. 'joint' reaches everyone;
+   'undergrad' reaches Y1 and Y2 but not Senior Fellows. */
+const UNDERGRAD_TAG     = 'undergrad';
+const UNDERGRAD_COHORTS = ['psc31180', 'psc31330'];
+const AUDIENCE_META = {
+  joint:     { label: 'All fellows', short: 'All',     color: '#BA7517' },
+  undergrad: { label: 'Y1 & Y2',     short: 'Y1 & Y2', color: '#BA7517' },
+};
+
+/* Does this event reach the given cohort? */
+function appliesTo(e, cohortId) {
+  if (e.course === cohortId)      return true;
+  if (e.course === 'joint')       return true;
+  if (e.course === UNDERGRAD_TAG) return UNDERGRAD_COHORTS.includes(cohortId);
+  return false;
+}
+
 // Injected by the server so the term is named in exactly one place.
 const CONFIG = window.PORTAL_CONFIG || {};
 const SEMESTER = CONFIG.semester || '';
@@ -143,7 +160,7 @@ function transformEvent(e) {
 
 function updateCourseEvents() {
   Object.keys(COURSES).forEach(id => {
-    COURSES[id].events = ALL_EVENTS.filter(e => e.course === id || e.course === 'joint');
+    COURSES[id].events = ALL_EVENTS.filter(e => appliesTo(e, id));
   });
 }
 
@@ -987,11 +1004,11 @@ function switchAdminTabByName(name) {
 function ds(y,m,d){ return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; }
 
 function courseColor(course) {
-  if (course === 'joint') return '#BA7517';
+  if (AUDIENCE_META[course]) return AUDIENCE_META[course].color;
   return COURSES[course] ? COURSES[course].color : '#6b6b6b';
 }
 function courseLabel(course) {
-  if (course === 'joint') return 'Joint';
+  if (AUDIENCE_META[course]) return AUDIENCE_META[course].short;
   const c = COURSES[course];
   return c ? (c.short || c.code) : '';
 }
@@ -1027,7 +1044,7 @@ function pillColors(e) {
 
 function courseFilteredEvents() {
   let evs = COURSES[calFilterCourse]
-    ? ALL_EVENTS.filter(e => e.course === calFilterCourse || e.course === 'joint')
+    ? ALL_EVENTS.filter(e => appliesTo(e, calFilterCourse))
     : ALL_EVENTS;
   if (isStudentMode) evs = evs.filter(e => !e.hidden);
   return evs;

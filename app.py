@@ -89,12 +89,16 @@ COURSES = {
     },
 }
 
-JOINT_COURSE = 'joint'
-JOINT_META = {
-    'code':  'Joint',
-    'short': 'Joint',
-    'title': 'Open to both courses',
-    'color': '#BA7517',
+# Audience tags, as distinct from a specific cohort. 'joint' reaches everyone;
+# 'undergrad' reaches Y1 and Y2 but not Senior Fellows, whose only standing
+# commitment is the Tuesday seminar.
+JOINT_COURSE      = 'joint'
+UNDERGRAD_TAG     = 'undergrad'
+UNDERGRAD_COHORTS = ('psc31180', 'psc31330')
+
+AUDIENCE_META = {
+    JOINT_COURSE:  {'code': 'All fellows', 'short': 'All',     'color': '#BA7517'},
+    UNDERGRAD_TAG: {'code': 'Y1 & Y2',     'short': 'Y1 & Y2', 'color': '#BA7517'},
 }
 
 STAFF_ROLES = ('admin', 'instructor', 'coordinator')
@@ -174,14 +178,18 @@ def staff_required(f):
 
 
 def course_clause(course):
-    """Airtable clause matching a course, plus events shared by both courses.
+    """Airtable clause for everything a given cohort should see.
 
-    Untagged events are included too, matching the serializer's behaviour —
-    otherwise an event with a blank Course field would vanish from every filter.
+    That is the cohort's own events, anything open to all fellows, and — for the
+    two undergraduate cohorts only — anything tagged for undergrads. Untagged
+    events are included too, matching the serializer's behaviour, so a blank
+    Course field doesn't make an event vanish from every filter.
     """
-    safe = escape_formula_value(course)
-    return (f"OR({{Course}}='{safe}', {{Course}}='{JOINT_COURSE}', "
-            f"{{Course}}=BLANK())")
+    tags = [escape_formula_value(course), JOINT_COURSE]
+    if course in UNDERGRAD_COHORTS:
+        tags.append(UNDERGRAD_TAG)
+    clauses = [f"{{Course}}='{t}'" for t in tags] + ['{Course}=BLANK()']
+    return 'OR(' + ', '.join(clauses) + ')'
 
 
 def asset_version():
