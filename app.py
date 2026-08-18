@@ -121,9 +121,6 @@ users_table         = airtable.table(AIRTABLE_BASE_ID, 'tbl7gqQHD2AkunIAz')
 events_table        = airtable.table(AIRTABLE_BASE_ID, 'tbl3P7neAyuA5gT7w')
 announcements_table = airtable.table(AIRTABLE_BASE_ID, 'tblXu9wY2ybY1NXEO')
 resources_table     = airtable.table(AIRTABLE_BASE_ID, 'tblVBg7D1n1WvYN40')
-# Program requirements. Read-only for fellows: with a shared access code there's
-# no identity to attach per-person progress to, so there are no checkboxes.
-requirements_table  = airtable.table(AIRTABLE_BASE_ID, 'tblHj4IkpvsL7no8F')
 usage_table         = airtable.table(AIRTABLE_BASE_ID, 'tblyJ2iEtU2X49Qr4')
 
 
@@ -218,8 +215,7 @@ def public_ics_url():
 
 TRACKED_METRICS = {
     'signin_fellow', 'signin_staff',
-    'view_dashboard', 'view_calendar', 'view_requirements',
-    'view_resources', 'view_about',
+    'view_dashboard', 'view_calendar', 'view_resources', 'view_about',
     'calendar_subscribe', 'ics_feed',
 }
 
@@ -357,6 +353,10 @@ def resource_to_dict(rec):
         'url':         d.get('URL', ''),
         'description': d.get('Description', ''),
         'category':    d.get('Category', 'general'),
+        # Which cohorts it's for. Empty means everyone.
+        'audience':    d.get('Audience') or [],
+        'is_required': 1 if d.get('Is Required') else 0,
+        'due_label':   d.get('Due Label', ''),
         'order_index': d.get('Order Index', 0),
     }
 
@@ -841,14 +841,47 @@ def create_resource():
     title = (data.get('title') or '').strip()
     if not title:
         return jsonify({'error': 'Title is required.'}), 400
+    audience = data.get('audience') or []
+    if not isinstance(audience, list):
+        audience = []
+    audience = [a for a in audience if a in COURSES]
+    existing = resources_table.all()
+    next_index = max([r['fields'].get('Order Index', 0) for r in existing] or [0]) + 1
     rec = resources_table.create({
         'Title':       title,
         'URL':         (data.get('url') or '').strip(),
         'Description': data.get('description', ''),
         'Category':    data.get('category', 'general'),
+        'Audience':    audience,
+        'Is Required': bool(data.get('is_required')),
+        'Due Label':   (data.get('due_label') or '').strip(),
         'Is Active':   True,
-    })
+        'Order Index': next_index,
+    }, typecast=True)
     return jsonify(resource_to_dict(rec)), 201
+
+
+@app.route('/api/resources/<string:res_id>', methods=['PATCH'])
+@staff_required
+def update_resource(res_id):
+    data = request.get_json(silent=True) or {}
+    if not resources_table.get(res_id):
+        return jsonify({'error': 'Not found'}), 404
+    updates = {}
+    for key, at_key in (('title', 'Title'), ('url', 'URL'),
+                        ('description', 'Description'), ('category', 'Category'),
+                        ('due_label', 'Due Label')):
+        if key in data:
+            updates[at_key] = data[key]
+    if 'audience' in data:
+        aud = data['audience'] if isinstance(data['audience'], list) else []
+        updates['Audience'] = [a for a in aud if a in COURSES]
+    if 'is_required' in data:
+        updates['Is Required'] = bool(data['is_required'])
+    if not updates:
+        return jsonify({'error': 'Nothing to update.'}), 400
+    return jsonify(resource_to_dict(
+        resources_table.update(res_id, updates, typecast=True)))
 
 
 @app.route('/api/resources/<string:res_id>', methods=['DELETE'])
@@ -857,45 +890,6 @@ def delete_resource(res_id):
     if not resources_table.get(res_id):
         return jsonify({'error': 'Not found'}), 404
     resources_table.update(res_id, {'Is Active': False})
-    return jsonify({'ok': True})
-
-
-# ── PROGRAM REQUIREMENTS ──────────────────────────────────────────────────────
-
-@app.route('/api/requirements')
-@login_required
-def get_requirements():
-    recs = requirements_table.all(sort=['Order Index'])
-    return jsonify([requirement_to_dict(r) for r in recs])
-
-
-@app.route('/api/requirements', methods=['POST'])
-@staff_required
-def create_requirement():
-    data  = request.get_json(silent=True) or {}
-    title = (data.get('title') or '').strip()
-    if not title:
-        return jsonify({'error': 'Title is required.'}), 400
-    existing = requirements_table.all()
-    next_index = max([r['fields'].get('Order Index', 0) for r in existing] or [0]) + 1
-    rec = requirements_table.create({
-        'Title':       title,
-        'Description': data.get('description', ''),
-        'Category':    data.get('category', 'general'),
-        'Link':        (data.get('link') or '').strip(),
-        'Due Label':   (data.get('due_label') or '').strip(),
-        'Is Required': bool(data.get('is_required')),
-        'Order Index': next_index,
-    })
-    return jsonify(requirement_to_dict(rec)), 201
-
-
-@app.route('/api/requirements/<string:req_id>', methods=['DELETE'])
-@staff_required
-def delete_requirement(req_id):
-    if not requirements_table.get(req_id):
-        return jsonify({'error': 'Not found'}), 404
-    requirements_table.delete(req_id)
     return jsonify({'ok': True})
 
 

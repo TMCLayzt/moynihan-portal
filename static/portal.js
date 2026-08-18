@@ -57,17 +57,13 @@ const COURSE_LABELS = {
   seniorfellows: 'Senior Fellows only',
 };
 
-const REQUIREMENT_CATS = {
-  finance: { label:'Finance & payroll',   color:'#1D9E75' },
-  survey:  { label:'Surveys & reports',   color:'#185FA5' },
-  general: { label:'General',             color:'#6b6b6b' },
-};
 
 const RESOURCE_CATS = {
   general:  { label:'General',         color:'#6b6b6b' },
   finance:  { label:'Finance & Stipends', color:'#1D9E75' },
   academic: { label:'Academic',         color:'#185FA5' },
   forms:    { label:'Forms & Documents', color:'#D85A30' },
+  survey:   { label:'Surveys & Reports', color:'#185FA5' },
   housing:  { label:'Housing',          color:'#BA7517' },
 };
 
@@ -76,7 +72,6 @@ const RESOURCE_CATS = {
 let ALL_EVENTS    = [];
 let announcements = [];
 let resources     = [];
-let requirements  = [];
 let adminUsers    = [];
 
 // Keys match Airtable's Course field values; only labels are display text.
@@ -270,22 +265,19 @@ async function api(method, path, body, { retries = 2 } = {}) {
 // ── POST-LOGIN DATA LOADER ────────────────────────────────────────────────────
 
 async function loadPortalData() {
-  const [evRes, annRes, resRes, reqRes] = await Promise.all([
+  const [evRes, annRes, resRes] = await Promise.all([
     api('GET', '/api/events'),
     api('GET', '/api/announcements'),
     api('GET', '/api/resources'),
-    api('GET', '/api/requirements'),
   ]);
 
   const evData  = await evRes.json();
   const annData = await annRes.json();
   const resData = await resRes.json();
-  const reqData = await reqRes.json();
 
   ALL_EVENTS    = Array.isArray(evData)  ? evData.map(transformEvent) : [];
   announcements = Array.isArray(annData) ? annData : [];
   resources     = Array.isArray(resData) ? resData : [];
-  requirements  = Array.isArray(reqData) ? reqData : [];
 
   updateCourseEvents();
 
@@ -423,7 +415,6 @@ async function logout() {
   ALL_EVENTS    = [];
   announcements = [];
   resources     = [];
-  requirements  = [];
   adminUsers    = [];
   updateCourseEvents();
   ['accessCode', 'loginUser', 'loginPass'].forEach(id => {
@@ -438,7 +429,7 @@ async function logout() {
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
 
-const TRACKED_VIEWS = ['dashboard','calendar','requirements','resources','about'];
+const TRACKED_VIEWS = ['dashboard','calendar','resources','about'];
 
 function trackView(name) {
   if (!TRACKED_VIEWS.includes(name)) return;
@@ -456,7 +447,6 @@ function showView(name) {
   });
   if (name === 'calendar')  renderCalendar();
   if (name === 'dashboard') renderDashboard();
-  if (name === 'requirements') renderRequirements();
   if (name === 'resources') renderResources();
   if (name === 'about')     renderAbout();
   if (name === 'admin') {
@@ -1011,7 +1001,7 @@ const USAGE_LABELS = {
   signin_staff:       'Staff sign-ins',
   view_dashboard:     'Dashboard',
   view_calendar:      'Calendar',
-  view_requirements:  'Requirements',
+  view_requirements:  'Requirements (retired tab)',
   view_resources:     'Resources',
   view_about:         'About',
   calendar_subscribe: 'Subscribe opened',
@@ -1082,7 +1072,6 @@ function switchAdminTab(name) {
   if (name === 'events')        renderAdminEvents(eventsFilter);
   if (name === 'users')         renderAdminUsers();
   if (name === 'usage')         renderAdminUsage();
-  if (name === 'requirements')  renderAdminRequirements();
   if (name === 'resources')     renderAdminResources();
 }
 
@@ -1478,109 +1467,59 @@ function closePanel() {
 
 /* Read-only for fellows. No checkboxes: everyone shares one access code, so a
    tick would be visible to every fellow rather than personal. */
-function renderRequirements() {
-  const el = document.getElementById('requirementsList');
-  if (!el) return;
-  if (!requirements.length) {
-    el.innerHTML = `<div style="font-size:13px;color:var(--gray-mid);padding:2rem 0;text-align:center">No requirements posted yet.</div>`;
-    return;
-  }
-  const cats = ['finance', 'survey', 'general']
-    .filter(c => requirements.some(r => r.category === c));
-  const others = [...new Set(requirements.map(r => r.category))].filter(c => !cats.includes(c));
 
-  el.innerHTML = [...cats, ...others].map(cat => {
-    const cl    = REQUIREMENT_CATS[cat] || { label: cat, color: '#6b6b6b' };
-    const items = requirements.filter(r => r.category === cat);
-    return `<div class="resource-cat-section">
-      <div class="resource-cat-title" style="color:${cl.color}">${cl.label}</div>
-      <div class="resource-items-grid">
-        ${items.map(r => {
-          const link = r.link
-            ? `<span class="btn-sm" style="margin-top:10px;font-size:11px;display:inline-flex;align-items:center;gap:5px">Open ↗</span>`
-            : '';
-          const inner = `
-            <div class="resource-card-title">${r.title}${r.is_required ? ` <span class="badge-mandatory" style="margin-left:4px">Required</span>` : ''}</div>
-            ${r.description ? `<div class="resource-card-desc">${r.description}</div>` : ''}
-            ${r.due_label ? `<div style="font-size:11px;color:${cl.color};margin-top:8px;font-weight:600">${r.due_label}</div>` : ''}
-            ${link}`;
-          return r.link
-            ? `<a href="${r.link}" target="_blank" rel="noopener" class="resource-card">${inner}</a>`
-            : `<div class="resource-card" style="cursor:default">${inner}</div>`;
-        }).join('')}
-      </div>
-    </div>`;
-  }).join('');
-}
 
-function renderAdminRequirements() {
-  const el = document.getElementById('adminRequirementsList');
-  if (!el) return;
-  if (!requirements.length) {
-    el.innerHTML = `<div style="font-size:13px;color:var(--gray-mid);padding:1.5rem 0">Nothing posted yet.</div>`;
-    return;
-  }
-  el.innerHTML = requirements.map(r => {
-    const cl = REQUIREMENT_CATS[r.category] || { label: r.category, color: '#6b6b6b' };
-    return `<div class="admin-list-item">
-      <div class="admin-list-accent" style="background:${cl.color}"></div>
-      <div class="admin-list-body">
-        <div class="admin-list-title">${r.title}${r.is_required ? ` <span class="badge-mandatory" style="margin-left:4px">Required</span>` : ''}</div>
-        <div class="admin-list-meta">
-          <span style="color:${cl.color}">${cl.label}</span>
-          ${r.due_label ? ` · ${r.due_label}` : ''}
-          ${r.link ? ` · <span style="color:#185FA5;font-size:10px">link set</span>` : ''}
-        </div>
-        ${r.description ? `<div class="admin-list-desc">${r.description}</div>` : ''}
-      </div>
-      <div class="admin-list-actions">
-        <button class="admin-btn-danger" onclick="deleteRequirement('${r.id}')">Delete</button>
-      </div>
-    </div>`;
-  }).join('');
-}
 
-async function addRequirement() {
-  const title = document.getElementById('rq-title').value.trim();
-  const err   = document.getElementById('rq-error');
-  err.textContent = '';
-  if (!title) { err.textContent = 'Title is required.'; return; }
-  const res = await api('POST', '/api/requirements', {
-    title,
-    description: document.getElementById('rq-desc').value.trim(),
-    category:    document.getElementById('rq-cat').value,
-    link:        document.getElementById('rq-link').value.trim(),
-    due_label:   document.getElementById('rq-due').value.trim(),
-    is_required: document.getElementById('rq-required').checked,
-  });
-  const data = await res.json();
-  if (!res.ok) { err.textContent = data.error || 'Could not add that.'; return; }
-  requirements.push(data);
-  requirements.sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
-  ['rq-title','rq-desc','rq-link','rq-due'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('rq-required').checked = true;
-  renderAdminRequirements();
-  renderRequirements();
-}
-
-async function deleteRequirement(id) {
-  if (!confirm('Delete this requirement?')) return;
-  const res = await api('DELETE', `/api/requirements/${id}`);
-  if (!res.ok) { alert('Could not delete that.'); return; }
-  requirements = requirements.filter(r => r.id !== id);
-  renderAdminRequirements();
-  renderRequirements();
-}
 
 
 // ── RESOURCES ─────────────────────────────────────────────────────────────────
+
+/* Fellows share one login, so there's no cohort to filter by automatically.
+   Everything is listed with a badge naming who it's for, plus a filter for
+   narrowing by hand — the same shape as the calendar. */
+let resFilterCourse = 'all';
+
+function resourceAppliesTo(r, cohortId) {
+  if (!r.audience || !r.audience.length) return true;   // no tag = everyone
+  return r.audience.includes(cohortId);
+}
+
+function setResFilter(id) {
+  resFilterCourse = id;
+  renderResources();
+}
+
+function audienceBadges(r) {
+  if (!r.audience || !r.audience.length) {
+    return `<span class="badge" style="background:#BA751718;color:#BA7517;font-size:10px">All fellows</span>`;
+  }
+  return r.audience.map(a => {
+    const c = COURSES[a];
+    if (!c) return '';
+    return `<span class="badge" style="background:${c.color}18;color:${c.color};font-size:10px;margin-right:4px">${c.short || c.code}</span>`;
+  }).join('');
+}
 
 function renderResources() {
   const el = document.getElementById('resourcesList');
   if (!el) return;
 
-  const cats = [...new Set(resources.map(r => r.category))];
-  if (!resources.length) {
+  const bar = document.getElementById('resFilterBar');
+  if (bar) {
+    const filters = [{ id:'all', label:'Everything', color:'#BA7517' },
+      ...Object.values(COURSES).map(c => ({ id:c.id, label:c.code, color:c.color }))];
+    bar.innerHTML = filters.map(f =>
+      `<button class="cal-filter-pill${resFilterCourse===f.id?' active':''}" onclick="setResFilter('${f.id}')">
+        <div class="cal-filter-pill-dot" style="background:${f.color}"></div>${f.label}
+      </button>`).join('');
+  }
+
+  const shown = COURSES[resFilterCourse]
+    ? resources.filter(r => resourceAppliesTo(r, resFilterCourse))
+    : resources;
+
+  const cats = [...new Set(shown.map(r => r.category))];
+  if (!shown.length) {
     el.innerHTML = `<div style="font-size:13px;color:var(--gray-mid);padding:2rem 0;text-align:center">No resources added yet.<br><span style="font-size:12px">Your instructor will add links to forms, guides, and documents here.</span></div>`;
     return;
   }
@@ -1596,14 +1535,16 @@ function renderResources() {
 
   el.innerHTML = cats.map(cat => {
     const cl    = RESOURCE_CATS[cat] || { label: cat, color: '#6b6b6b' };
-    const items = resources.filter(r => r.category === cat);
+    const items = shown.filter(r => r.category === cat);
     return `<div class="resource-cat-section" id="res-cat-${cat}">
       <div class="resource-cat-title" style="color:${cl.color}">${cl.label}</div>
       <div class="resource-items-grid">
         ${items.map(r => `
           <a href="${r.url || '#'}" target="_blank" rel="noopener" class="resource-card" style="${!r.url?'pointer-events:none;opacity:0.6':''}">
-            <div class="resource-card-title">${r.title}</div>
+            <div class="resource-card-title">${r.is_required ? '★ ' : ''}${r.title}</div>
+            <div style="margin:6px 0 2px">${audienceBadges(r)}${r.is_required ? `<span class="badge-mandatory" style="margin-left:4px">Required</span>` : ''}</div>
             ${r.description ? `<div class="resource-card-desc">${r.description}</div>` : ''}
+            ${r.due_label ? `<div style="font-size:11px;color:${cl.color};margin-top:6px;font-weight:600">${r.due_label}</div>` : ''}
             ${r.url ? `<div class="resource-card-link">Open →</div>` : '<div class="resource-card-link" style="color:var(--gray-mid)">No link yet</div>'}
           </a>`).join('')}
       </div>
@@ -1623,32 +1564,99 @@ function renderAdminResources() {
     return `<div class="admin-list-row">
       <div class="admin-list-accent" style="background:${cl.color}"></div>
       <div class="admin-list-body">
-        <div class="admin-list-title">${r.title}</div>
-        <div class="admin-list-meta">${cl.label}${r.url ? ' · ' + r.url.slice(0,50) : ''}${r.description ? ' · ' + r.description.slice(0,50) : ''}</div>
+        <div class="admin-list-title">${r.is_required ? '★ ' : ''}${r.title}</div>
+        <div class="admin-list-meta">
+          <span style="color:${cl.color}">${cl.label}</span>
+          · ${(r.audience && r.audience.length)
+                ? r.audience.map(a => (COURSES[a] ? (COURSES[a].short || COURSES[a].code) : a)).join(' + ')
+                : 'All fellows'}
+          ${r.due_label ? ' · ' + r.due_label : ''}
+          ${r.url ? ' · link set' : ' · no link'}
+        </div>
+        ${r.description ? `<div class="admin-list-meta" style="margin-top:3px">${r.description.slice(0,80)}${r.description.length>80?'…':''}</div>` : ''}
       </div>
-      <div class="admin-list-actions">
+      <div class="admin-list-actions" style="gap:6px">
+        <button class="admin-btn-secondary" style="padding:5px 10px;font-size:10px" onclick="startEditResource('${r.id}')">Edit</button>
         <button class="admin-btn-danger" onclick="deleteResource('${r.id}')">Delete</button>
       </div>
     </div>`;
   }).join('');
 }
 
-async function addResource() {
-  const title       = document.getElementById('res-title').value.trim();
-  const url         = document.getElementById('res-url').value.trim();
-  const description = document.getElementById('res-desc').value.trim();
-  const category    = document.getElementById('res-cat').value;
-  if (!title) return;
-  const res = await api('POST', '/api/resources', { title, url, description, category });
-  if (res.ok) {
-    const data = await res.json();
+/* One form for adding and editing, as with events. */
+let editingResourceId = null;
+
+function readResourceForm() {
+  return {
+    title:       document.getElementById('res-title').value.trim(),
+    url:         document.getElementById('res-url').value.trim(),
+    description: document.getElementById('res-desc').value.trim(),
+    category:    document.getElementById('res-cat').value,
+    due_label:   document.getElementById('res-due').value.trim(),
+    is_required: document.getElementById('res-required').checked,
+    audience:    [...document.querySelectorAll('.res-audience')].filter(c => c.checked).map(c => c.value),
+  };
+}
+
+function clearResourceForm() {
+  ['res-title','res-url','res-desc','res-due'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('res-required').checked = false;
+  document.querySelectorAll('.res-audience').forEach(c => c.checked = false);
+}
+
+function setResourceFormMode(editing) {
+  const btn = document.getElementById('res-submit');
+  const cancel = document.getElementById('res-cancel');
+  if (btn)    btn.textContent = editing ? 'Save changes' : 'Add resource';
+  if (cancel) cancel.style.display = editing ? '' : 'none';
+}
+
+function startEditResource(id) {
+  const r = resources.find(x => x.id === id);
+  if (!r) return;
+  editingResourceId = id;
+  document.getElementById('res-title').value    = r.title || '';
+  document.getElementById('res-url').value      = r.url || '';
+  document.getElementById('res-desc').value     = r.description || '';
+  document.getElementById('res-cat').value      = r.category || 'general';
+  document.getElementById('res-due').value      = r.due_label || '';
+  document.getElementById('res-required').checked = !!r.is_required;
+  document.querySelectorAll('.res-audience').forEach(c => {
+    c.checked = (r.audience || []).includes(c.value);
+  });
+  setResourceFormMode(true);
+  document.getElementById('res-title').scrollIntoView({ behavior:'smooth', block:'center' });
+}
+
+function cancelEditResource() {
+  editingResourceId = null;
+  clearResourceForm();
+  setResourceFormMode(false);
+}
+
+async function submitResource() {
+  const body = readResourceForm();
+  const err  = document.getElementById('res-error');
+  if (err) err.textContent = '';
+  if (!body.title) { if (err) err.textContent = 'Title is required.'; return; }
+
+  const editing = !!editingResourceId;
+  const res  = editing
+    ? await api('PATCH', `/api/resources/${editingResourceId}`, body)
+    : await api('POST', '/api/resources', body);
+  const data = await res.json();
+  if (!res.ok) { if (err) err.textContent = data.error || 'Could not save that.'; return; }
+
+  if (editing) {
+    const i = resources.findIndex(x => x.id === editingResourceId);
+    if (i > -1) resources[i] = data;
+    cancelEditResource();
+  } else {
     resources.push(data);
-    document.getElementById('res-title').value = '';
-    document.getElementById('res-url').value   = '';
-    document.getElementById('res-desc').value  = '';
-    renderAdminResources();
-    renderResources();
+    clearResourceForm();
   }
+  renderAdminResources();
+  renderResources();
 }
 
 async function deleteResource(id) {
