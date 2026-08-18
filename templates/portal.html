@@ -404,6 +404,7 @@
     <button class="admin-tab" onclick="switchAdminTab('requirements')">Requirements</button>
     <button class="admin-tab" onclick="switchAdminTab('resources')">Resources</button>
     <button class="admin-tab" onclick="switchAdminTab('users')">Admin users</button>
+    <button class="admin-tab" onclick="switchAdminTab('usage')">Usage</button>
     <span id="adminCourseIndicator" style="margin-left:auto;font-size:11px;color:var(--gray-mid);align-self:center;padding-right:1rem;white-space:nowrap"></span>
   </div>
 
@@ -474,6 +475,7 @@
             <select class="form-input" id="ev-course">
               <option value="psc31180">Year 1 — Politics, Power, and Policy in NYC</option>
               <option value="psc31330">Year 2 — Philanthropy and the Public Good</option>
+              <option value="seniorfellows">Senior Fellows — Moynihan Seminar</option>
               <option value="joint">Joint / both cohorts</option>
             </select>
           </div>
@@ -503,6 +505,7 @@
         <button class="admin-filter active" onclick="filterEvents('all',this)">All</button>
         <button class="admin-filter" onclick="filterEvents('psc31180',this)">Year 1</button>
         <button class="admin-filter" onclick="filterEvents('psc31330',this)">Year 2</button>
+        <button class="admin-filter" onclick="filterEvents('seniorfellows',this)">Senior</button>
         <button class="admin-filter" onclick="filterEvents('joint',this)">Joint</button>
       </div>
       <div id="adminEventList"></div>
@@ -578,7 +581,18 @@
     </div>
 
     <!-- ── ADMIN USERS ── -->
-    <div class="admin-panel" id="apanel-users">
+    <div class="admin-panel" id="apanel-usage">
+  <div class="admin-section-head">
+    <div>
+      <div class="admin-section-title">Portal usage</div>
+      <div class="admin-section-sub">Aggregate counts kept in your own Airtable. No third-party
+        tracking, no cookies beyond the sign-in session, and no per-person data.</div>
+    </div>
+  </div>
+  <div id="adminUsageBody"></div>
+</div>
+
+<div class="admin-panel" id="apanel-users">
       <div class="admin-section-header">
         <div>
           <div class="admin-section-title">Admin users</div>
@@ -605,6 +619,7 @@
               <option value="both">Both courses</option>
               <option value="psc31180">Year 1 only</option>
               <option value="psc31330">Year 2 only</option>
+              <option value="seniorfellows">Senior Fellows only</option>
             </select>
           </div>
         </div>

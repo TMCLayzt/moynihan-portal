@@ -7,9 +7,11 @@ accounts and no student records, so the portal holds no personal information.
 Staff sign in with individual accounts stored in Airtable.
 """
 
+import atexit
 import hmac
 import os
 import sys
+import threading
 from datetime import date, datetime, timedelta
 from functools import wraps
 
@@ -77,6 +79,14 @@ COURSES = {
         'meets':    'Wednesdays, 2:00–4:30 PM',
         'color':    '#185FA5',
     },
+    'seniorfellows': {
+        'code':     'Senior Fellows',
+        'short':    'Senior',
+        'title':    'Moynihan Seminar',
+        'location': 'SH-558',
+        'meets':    'Tuesdays, 12:00–2:00 PM',
+        'color':    '#20785C',
+    },
 }
 
 JOINT_COURSE = 'joint'
@@ -110,6 +120,7 @@ resources_table     = airtable.table(AIRTABLE_BASE_ID, 'tblVBg7D1n1WvYN40')
 # Program requirements. Read-only for fellows: with a shared access code there's
 # no identity to attach per-person progress to, so there are no checkboxes.
 requirements_table  = airtable.table(AIRTABLE_BASE_ID, 'tblHj4IkpvsL7no8F')
+usage_table         = airtable.table(AIRTABLE_BASE_ID, 'tblyJ2iEtU2X49Qr4')
 
 
 # ── HELPERS ───────────────────────────────────────────────────────────────────
@@ -187,6 +198,82 @@ def asset_version():
 
 def public_ics_url():
     return f"{request.url_root.rstrip('/')}/api/calendar.ics?token={ICS_PUBLIC_TOKEN}"
+
+
+# ── USAGE COUNTERS ────────────────────────────────────────────────────────────
+# Aggregate only: one row per day per metric, no identities and no paths. With a
+# shared access code there is nothing to attribute to an individual anyway.
+#
+# Counts are buffered in memory and flushed on a timer, so a fellow clicking a
+# tab never waits on an Airtable write. A restart can lose up to one flush
+# interval, which is an acceptable trade for usage figures.
+
+TRACKED_METRICS = {
+    'signin_fellow', 'signin_staff',
+    'view_dashboard', 'view_calendar', 'view_requirements',
+    'view_resources', 'view_about',
+    'calendar_subscribe', 'ics_feed',
+}
+
+FLUSH_INTERVAL_SECONDS = 30
+
+_usage_lock    = threading.Lock()
+_usage_pending = {}          # (date, metric) -> count not yet written
+
+
+def track(metric):
+    """Record one occurrence. Cheap, non-blocking, never raises."""
+    if metric not in TRACKED_METRICS:
+        return
+    key = (date.today().isoformat(), metric)
+    with _usage_lock:
+        _usage_pending[key] = _usage_pending.get(key, 0) + 1
+
+
+def flush_usage():
+    """Write buffered counts to Airtable, adding to whatever is already there."""
+    with _usage_lock:
+        if not _usage_pending:
+            return
+        batch, _usage_pending_local = dict(_usage_pending), None
+        _usage_pending.clear()
+
+    try:
+        # One lookup for the days involved, then create or increment.
+        days = sorted({d for d, _ in batch})
+        clause = ', '.join(f"{{Date}}='{escape_formula_value(d)}'" for d in days)
+        formula = f'OR({clause})' if len(days) > 1 else clause
+        existing = {r['fields'].get('Key'): r for r in usage_table.all(formula=formula)}
+
+        creates, updates = [], []
+        for (day, metric), n in batch.items():
+            key = f'{day}|{metric}'
+            rec = existing.get(key)
+            if rec:
+                updates.append({'id': rec['id'],
+                                'fields': {'Count': (rec['fields'].get('Count') or 0) + n}})
+            else:
+                creates.append({'Key': key, 'Date': day, 'Metric': metric, 'Count': n})
+        if updates:
+            usage_table.batch_update(updates)
+        for c in creates:
+            usage_table.create(c)
+    except Exception:
+        # Never let analytics break the app; put the counts back and retry later.
+        app.logger.exception('usage flush failed')
+        with _usage_lock:
+            for k, n in batch.items():
+                _usage_pending[k] = _usage_pending.get(k, 0) + n
+
+
+def _flush_loop():
+    while True:
+        threading.Event().wait(FLUSH_INTERVAL_SECONDS)
+        flush_usage()
+
+
+threading.Thread(target=_flush_loop, daemon=True).start()
+atexit.register(flush_usage)
 
 
 # ── SERIALIZERS ───────────────────────────────────────────────────────────────
@@ -331,6 +418,7 @@ def login():
         session.permanent = True
         session['role']   = 'student'
         session['name']   = 'Fellow'
+        track('signin_fellow')
         return jsonify({
             'role':           'student',
             'is_staff':       False,
@@ -363,6 +451,7 @@ def login():
     session['name']       = name
     session['initials']   = fields.get('Initials') or make_initials(name)
     session['course']     = fields.get('Course', 'both')
+    track('signin_staff')
     return jsonify({
         'role':           role,
         'is_staff':       True,
@@ -565,6 +654,7 @@ def calendar_feed():
     recs = events_table.all(formula=formula, sort=['Date']) if formula \
         else events_table.all(sort=['Date'])
 
+    track('ics_feed')
     name = f'Moynihan Fellowship — {SEMESTER_LABEL}'
     if include_staff_only:
         name += ' (Staff)'
@@ -702,6 +792,39 @@ def delete_requirement(req_id):
         return jsonify({'error': 'Not found'}), 404
     requirements_table.delete(req_id)
     return jsonify({'ok': True})
+
+
+# ── USAGE API ─────────────────────────────────────────────────────────────────
+
+@app.route('/api/track', methods=['POST'])
+@login_required
+def track_event():
+    """Frontend reports which tab was opened. Only names on the allowlist count."""
+    data = request.get_json(silent=True) or {}
+    track((data.get('metric') or '').strip())
+    return jsonify({'ok': True})
+
+
+@app.route('/api/usage')
+@staff_required
+def get_usage():
+    """Aggregate counts, newest day first. Staff only."""
+    flush_usage()          # so the numbers include the current buffer
+    recs = usage_table.all()
+    by_metric, by_day = {}, {}
+    for r in recs:
+        f = r['fields']
+        metric, day = f.get('Metric'), f.get('Date')
+        n = f.get('Count') or 0
+        if not metric or not day:
+            continue
+        by_metric[metric] = by_metric.get(metric, 0) + n
+        by_day.setdefault(day, {})[metric] = n
+    return jsonify({
+        'totals': by_metric,
+        'days':   [{'date': d, 'metrics': by_day[d]} for d in sorted(by_day, reverse=True)],
+        'tracked': sorted(TRACKED_METRICS),
+    })
 
 
 # ── STAFF ACCOUNTS ────────────────────────────────────────────────────────────

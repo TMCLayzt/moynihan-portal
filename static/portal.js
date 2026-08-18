@@ -50,6 +50,7 @@ const COURSE_LABELS = {
   both:     'Both courses',
   psc31180: 'Year 1 only',
   psc31330: 'Year 2 only',
+  seniorfellows: 'Senior Fellows only',
 };
 
 const REQUIREMENT_CATS = {
@@ -92,6 +93,14 @@ const COURSES = {
     color:'#185FA5', bg:'#E6F1FB',
     events:[],
   },
+  seniorfellows: {
+    id:'seniorfellows', code:'Senior Fellows',
+    title:'Moynihan Seminar',
+    location:'SH-558',
+    meets:'Tuesdays, 12:00–2:00 PM',
+    color:'#20785C', bg:'#E3F0EB',
+    events:[],
+  },
 };
 
 // Injected by the server so the term is named in exactly one place.
@@ -132,8 +141,9 @@ function transformEvent(e) {
 }
 
 function updateCourseEvents() {
-  COURSES.psc31180.events = ALL_EVENTS.filter(e => e.course === 'psc31180' || e.course === 'joint');
-  COURSES.psc31330.events = ALL_EVENTS.filter(e => e.course === 'psc31330' || e.course === 'joint');
+  Object.keys(COURSES).forEach(id => {
+    COURSES[id].events = ALL_EVENTS.filter(e => e.course === id || e.course === 'joint');
+  });
 }
 
 
@@ -384,7 +394,15 @@ async function logout() {
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
 
+const TRACKED_VIEWS = ['dashboard','calendar','requirements','resources','about'];
+
+function trackView(name) {
+  if (!TRACKED_VIEWS.includes(name)) return;
+  api('POST', '/api/track', { metric: `view_${name}` }, { retries: 0 }).catch(() => {});
+}
+
 function showView(name) {
+  trackView(name);
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.querySelectorAll('.subnav-link').forEach(l => l.classList.remove('active'));
   document.getElementById('view-'+name).classList.add('active');
@@ -875,6 +893,73 @@ function renderAdminUsers() {
 }
 
 
+// ── ADMIN: USAGE ──────────────────────────────────────────────────────────────
+
+const USAGE_LABELS = {
+  signin_fellow:      'Fellow sign-ins',
+  signin_staff:       'Staff sign-ins',
+  view_dashboard:     'Dashboard',
+  view_calendar:      'Calendar',
+  view_requirements:  'Requirements',
+  view_resources:     'Resources',
+  view_about:         'About',
+  calendar_subscribe: 'Subscribe opened',
+  ics_feed:           'Calendar feed fetched',
+};
+
+async function renderAdminUsage() {
+  const el = document.getElementById('adminUsageBody');
+  if (!el) return;
+  el.innerHTML = `<div style="font-size:13px;color:var(--gray-mid);padding:1.5rem 0">Loading…</div>`;
+  const res  = await api('GET', '/api/usage');
+  const data = await res.json();
+  if (!res.ok) {
+    el.innerHTML = `<div class="form-error" style="display:block">${data.error || 'Could not load usage.'}</div>`;
+    return;
+  }
+  const totals = data.totals || {};
+  const order  = Object.keys(USAGE_LABELS).filter(k => totals[k]);
+  if (!order.length) {
+    el.innerHTML = `<div style="font-size:13px;color:var(--gray-mid);padding:1.5rem 0">
+      Nothing recorded yet. Counts appear once fellows start signing in.</div>`;
+    return;
+  }
+  const max = Math.max(...order.map(k => totals[k]));
+
+  const bars = order.map(k => `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+      <div style="width:170px;font-size:12px;color:var(--gray-brand);flex-shrink:0">${USAGE_LABELS[k]}</div>
+      <div style="flex:1;background:#f0eeea;border-radius:3px;height:18px;position:relative;min-width:60px">
+        <div style="width:${Math.max(2, (totals[k]/max)*100)}%;background:#8B1A1A;height:100%;border-radius:3px"></div>
+      </div>
+      <div style="width:48px;text-align:right;font-size:13px;font-weight:700;color:var(--gray-brand)">${totals[k]}</div>
+    </div>`).join('');
+
+  const recent = (data.days || []).slice(0, 14);
+  const rows = recent.map(d => {
+    const parts = Object.entries(d.metrics)
+      .filter(([k]) => USAGE_LABELS[k])
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, n]) => `${USAGE_LABELS[k]} ${n}`)
+      .join(' · ');
+    return `<div style="display:flex;gap:14px;padding:7px 0;border-bottom:1px solid #efedea;font-size:12px">
+      <div style="width:92px;flex-shrink:0;color:var(--gray-brand);font-weight:600">${d.date}</div>
+      <div style="color:var(--gray-mid);line-height:1.6">${parts || '—'}</div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div style="font-size:12px;color:var(--gray-mid);margin-bottom:1.5rem;line-height:1.7;max-width:620px">
+      Totals since tracking began. These are aggregate counts only &mdash; no names, no
+      individuals, nothing about who did what. Fellows share one access code, so there
+      is nothing to attribute to a person even in principle.
+    </div>
+    <div style="margin-bottom:2.5rem">${bars}</div>
+    <div class="section-label" style="margin-bottom:0.75rem">Last 14 days recorded</div>
+    ${rows || '<div style="font-size:12px;color:var(--gray-mid)">No daily records yet.</div>'}`;
+}
+
+
 // ── ADMIN TAB SWITCHING ───────────────────────────────────────────────────────
 
 function switchAdminTab(name) {
@@ -885,6 +970,7 @@ function switchAdminTab(name) {
   if (name === 'announcements') renderAdminAnnouncements();
   if (name === 'events')        renderAdminEvents(eventsFilter);
   if (name === 'users')         renderAdminUsers();
+  if (name === 'usage')         renderAdminUsage();
   if (name === 'requirements')  renderAdminRequirements();
   if (name === 'resources')     renderAdminResources();
 }
@@ -900,16 +986,12 @@ function switchAdminTabByName(name) {
 function ds(y,m,d){ return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; }
 
 function courseColor(course) {
-  if (course === 'joint')    return '#BA7517';
-  if (course === 'psc31180') return '#8B1A1A';
-  if (course === 'psc31330') return '#185FA5';
-  return '#6b6b6b';
+  if (course === 'joint') return '#BA7517';
+  return COURSES[course] ? COURSES[course].color : '#6b6b6b';
 }
 function courseLabel(course) {
-  if (course === 'joint')    return 'Joint';
-  if (course === 'psc31180') return 'Year 1';
-  if (course === 'psc31330') return 'Year 2';
-  return '';
+  if (course === 'joint') return 'Joint';
+  return COURSES[course] ? COURSES[course].code : '';
 }
 
 /* CUNY academic dates and closures are tagged Course='joint' so they reach
@@ -940,10 +1022,9 @@ function pillColors(e) {
 }
 
 function courseFilteredEvents() {
-  let evs;
-  if      (calFilterCourse === 'psc31180') evs = ALL_EVENTS.filter(e => e.course === 'psc31180' || e.course === 'joint');
-  else if (calFilterCourse === 'psc31330') evs = ALL_EVENTS.filter(e => e.course === 'psc31330' || e.course === 'joint');
-  else evs = ALL_EVENTS;
+  let evs = COURSES[calFilterCourse]
+    ? ALL_EVENTS.filter(e => e.course === calFilterCourse || e.course === 'joint')
+    : ALL_EVENTS;
   if (isStudentMode) evs = evs.filter(e => !e.hidden);
   return evs;
 }
@@ -1003,9 +1084,8 @@ function renderCalendar() {
     // Master calendar first — it's the default view. The other two narrow it to
     // one class, still including events shared by both.
     const filters = [
-      { id:'all',      label:'Master calendar', color:'#BA7517' },
-      { id:'psc31180', label:'Year 1',          color:'#8B1A1A' },
-      { id:'psc31330', label:'Year 2',          color:'#185FA5' },
+      { id:'all', label:'Master calendar', color:'#BA7517' },
+      ...Object.values(COURSES).map(c => ({ id:c.id, label:c.code, color:c.color })),
     ];
     filterBar.innerHTML = filters.map(f =>
       `<button class="cal-filter-pill${calFilterCourse===f.id?' active':''}" onclick="setCalFilter('${f.id}')">
@@ -1020,7 +1100,7 @@ function renderCalendar() {
     const c = COURSES[calFilterCourse];
     heroMeta.textContent = c
       ? `${c.code} — ${c.title}`
-      : `${COURSES.psc31180.title}  ·  ${COURSES.psc31330.title}`;
+      : Object.values(COURSES).map(x => x.title).join('  ·  ');
   }
   const present = courseFilteredEvents();
   const counts  = {};
@@ -1486,6 +1566,7 @@ function getIcsUrl() {
 }
 
 function openCalSubscribeModal() {
+  api('POST', '/api/track', { metric: 'calendar_subscribe' }, { retries: 0 }).catch(() => {});
   const url = getIcsUrl();
   const el = document.getElementById('icsUrlDisplay');
   if (el) el.value = url;
