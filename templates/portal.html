@@ -449,7 +449,7 @@
         </div>
       </div>
       <div class="admin-form-card">
-        <div class="admin-form-title">New event</div>
+        <div class="admin-form-title" id="ev-form-head">New event</div>
         <div class="admin-row-3">
           <div class="form-group"><label class="form-label">Title</label><input class="form-input" id="ev-title" type="text" placeholder="e.g. Guest: Jane Smith"></div>
           <div class="form-group"><label class="form-label">Date</label><input class="form-input" id="ev-date" type="date"></div>
@@ -502,7 +502,11 @@
             <label for="ev-staff-only" class="form-label" style="margin:0;cursor:pointer;color:#7B3D8F">Staff only (hidden from students)</label>
           </div>
         </div>
-        <button class="admin-btn-primary" onclick="adminAddEvent()">Add to calendar</button>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <button class="admin-btn-primary" id="ev-submit" onclick="adminSubmitEvent()">Add event</button>
+          <button class="admin-btn-secondary" id="ev-cancel" onclick="cancelEditEvent()" style="display:none">Cancel</button>
+          <span class="form-error" id="ev-error" style="display:inline-block"></span>
+        </div>
       </div>
       <div class="admin-section-title" style="margin-top:2rem;margin-bottom:1rem">All events <span id="eventsCount" style="font-weight:400;color:var(--gray-mid)"></span></div>
       <div class="admin-filter-bar">

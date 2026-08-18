@@ -744,34 +744,116 @@ async function deleteAnnouncement(id) {
 
 // ── EVENTS (ADMIN) ────────────────────────────────────────────────────────────
 
-async function adminAddEvent() {
-  const title          = document.getElementById('ev-title').value.trim();
-  const date           = document.getElementById('ev-date').value;
-  const cat            = document.getElementById('ev-cat').value;
-  const note           = document.getElementById('ev-note').value.trim();
-  const description    = document.getElementById('ev-description').value.trim();
-  const eventbrite_url = document.getElementById('ev-eventbrite').value.trim();
-  const required_for   = document.getElementById('ev-required-for').value;
-  const is_staff_only  = document.getElementById('ev-staff-only').checked;
-  const course         = document.getElementById('ev-course').value;
-  if (!title || !date) return;
-  const res = await api('POST', '/api/events', { title, date, cat, note, description, eventbrite_url, required_for, is_staff_only, course });
-  if (res.ok) {
-    const data = await res.json();
-    ALL_EVENTS.push(transformEvent(data));
-    ALL_EVENTS.sort((a,b) => a.date.localeCompare(b.date));
-    updateCourseEvents();
-    document.getElementById('ev-title').value          = '';
-    document.getElementById('ev-date').value           = '';
-    document.getElementById('ev-note').value           = '';
-    document.getElementById('ev-description').value    = '';
-    document.getElementById('ev-eventbrite').value     = '';
-    document.getElementById('ev-required-for').value   = 'none';
-    document.getElementById('ev-staff-only').checked   = false;
-    renderCalendar();
-    renderDashboard();
-    renderAdminEvents(eventsFilter);
+/* One form does both jobs. Editing loads the record into it and switches the
+   button to Save; adding leaves it empty. Avoids a second near-identical form
+   drifting out of sync with the first. */
+let editingEventId = null;
+
+const EVENT_FIELD_IDS = ['ev-title','ev-date','ev-note','ev-description','ev-eventbrite'];
+
+function readEventForm() {
+  return {
+    title:          document.getElementById('ev-title').value.trim(),
+    date:           document.getElementById('ev-date').value,
+    cat:            document.getElementById('ev-cat').value,
+    note:           document.getElementById('ev-note').value.trim(),
+    description:    document.getElementById('ev-description').value.trim(),
+    eventbrite_url: document.getElementById('ev-eventbrite').value.trim(),
+    required_for:   document.getElementById('ev-required-for').value,
+    is_staff_only:  document.getElementById('ev-staff-only').checked,
+    course:         document.getElementById('ev-course').value,
+  };
+}
+
+function clearEventForm() {
+  EVENT_FIELD_IDS.forEach(id => document.getElementById(id).value = '');
+  document.getElementById('ev-required-for').value = 'none';
+  document.getElementById('ev-staff-only').checked = false;
+}
+
+function setEventFormMode(editing) {
+  const btn = document.getElementById('ev-submit');
+  const cancel = document.getElementById('ev-cancel');
+  const head = document.getElementById('ev-form-head');
+  if (btn)    btn.textContent = editing ? 'Save changes' : 'Add event';
+  if (cancel) cancel.style.display = editing ? '' : 'none';
+  if (head)   head.textContent = editing ? 'Editing event' : 'New event';
+}
+
+function startEditEvent(id) {
+  const e = ALL_EVENTS.find(x => x.id === id);
+  if (!e) return;
+  editingEventId = id;
+  document.getElementById('ev-title').value        = e.title || '';
+  document.getElementById('ev-date').value         = e.date || '';
+  document.getElementById('ev-cat').value          = e.cat || 'lecture';
+  document.getElementById('ev-note').value         = e.note || '';
+  document.getElementById('ev-description').value  = e.description || '';
+  document.getElementById('ev-eventbrite').value   = e.eventbrite_url || '';
+  document.getElementById('ev-required-for').value = e.required_for || 'none';
+  document.getElementById('ev-staff-only').checked = !!e.staffOnly;
+  document.getElementById('ev-course').value       = e.course || 'joint';
+  setEventFormMode(true);
+  document.getElementById('ev-title').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  document.getElementById('ev-title').focus();
+}
+
+function cancelEditEvent() {
+  editingEventId = null;
+  clearEventForm();
+  setEventFormMode(false);
+}
+
+async function adminSubmitEvent() {
+  if (editingEventId) return adminUpdateEvent();
+  return adminAddEvent();
+}
+
+async function adminUpdateEvent() {
+  const body = readEventForm();
+  const err  = document.getElementById('ev-error');
+  if (err) err.textContent = '';
+  if (!body.title || !body.date) {
+    if (err) err.textContent = 'Title and date are required.';
+    return;
   }
+  const res  = await api('PATCH', `/api/events/${editingEventId}`, body);
+  const data = await res.json();
+  if (!res.ok) {
+    if (err) err.textContent = data.error || 'Could not save those changes.';
+    return;
+  }
+  const idx = ALL_EVENTS.findIndex(e => e.id === editingEventId);
+  if (idx > -1) ALL_EVENTS[idx] = transformEvent(data);
+  ALL_EVENTS.sort((a, b) => a.date.localeCompare(b.date));
+  updateCourseEvents();
+  cancelEditEvent();
+  renderCalendar();
+  renderDashboard();
+  renderAdminEvents(eventsFilter);
+}
+
+async function adminAddEvent() {
+  const body = readEventForm();
+  const err  = document.getElementById('ev-error');
+  if (err) err.textContent = '';
+  if (!body.title || !body.date) {
+    if (err) err.textContent = 'Title and date are required.';
+    return;
+  }
+  const res  = await api('POST', '/api/events', body);
+  const data = await res.json();
+  if (!res.ok) {
+    if (err) err.textContent = data.error || 'Could not add that event.';
+    return;
+  }
+  ALL_EVENTS.push(transformEvent(data));
+  ALL_EVENTS.sort((a, b) => a.date.localeCompare(b.date));
+  updateCourseEvents();
+  clearEventForm();
+  renderCalendar();
+  renderDashboard();
+  renderAdminEvents(eventsFilter);
 }
 
 async function adminDeleteEvent(id) {
@@ -843,6 +925,7 @@ function renderAdminEvents(filter) {
         </div>
       </div>
       <div class="admin-list-actions" style="gap:6px">
+        <button class="admin-btn-secondary" style="padding:5px 10px;font-size:10px" onclick="startEditEvent('${e.id}')">Edit</button>
         <button class="admin-btn-secondary" style="padding:5px 10px;font-size:10px" onclick="toggleEventHidden('${e.id}')">${e.hidden?'Show':'Hide'}</button>
         <button class="admin-btn-danger" onclick="adminDeleteEvent('${e.id}')">Delete</button>
       </div>
