@@ -7,10 +7,20 @@ const CATS = [
   { id:'homework',    label:'Homework deadline',   color:'#D85A30', bg:'#FAECE7' },
   { id:'application', label:'Application deadline',color:'#A32D2D', bg:'#FCEBEB' },
   { id:'guest',       label:'Guest speaker',       color:'#185FA5', bg:'#E6F1FB' },
-  { id:'milestone',   label:'Student milestone',   color:'#BA7517', bg:'#FAEEDA' },
+  { id:'milestone',   label:'Events',              color:'#BA7517', bg:'#FAEEDA' },
+  // CUNY academic calendar, not fellowship programming
+  { id:'academic',    label:'CUNY academic date',  color:'#4A5568', bg:'#EDF2F7' },
+  { id:'closed',      label:'No classes / closed', color:'#7A7A7A', bg:'#F0F0F0' },
+  { id:'general',     label:'Other',               color:'#6b6b6b', bg:'#f4f3f0' },
 ];
 const CAT = {};
 CATS.forEach(c => CAT[c.id] = c);
+
+/* Safe lookup: an unrecognised or blank category (e.g. typed straight into
+   Airtable) renders as neutral "Other" rather than mislabelling the event. */
+function catOf(id) {
+  return CAT[id] || CAT.general;
+}
 
 const MONTHS_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const DAYS_SHORT  = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -464,7 +474,7 @@ function renderDashboard() {
   ul.innerHTML = dueSoon.length === 0
     ? `<div style="font-size:13px;color:var(--gray-mid);padding:1rem 0">No deadlines ${dashWindow==='week'?'this week':dashWindow==='month'?'this month':'coming up'}.</div>`
     : dueSoon.map(e => {
-        const cat = CAT[e.cat];
+        const cat = catOf(e.cat);
         const cc  = courseColor(e.course);
         const cl  = courseLabel(e.course);
         const [yr,mo,dy] = e.date.split('-').map(Number);
@@ -519,7 +529,7 @@ function renderDashboard() {
   strip.innerHTML = upcomingEvs.length === 0
     ? `<div style="padding:1.5rem;font-size:13px;color:var(--gray-mid)">No upcoming sessions.</div>`
     : upcomingEvs.map(e => {
-        const cat     = CAT[e.cat];
+        const cat     = catOf(e.cat);
         const cc      = courseColor(e.course);
         const isJoint = e.course === 'joint';
         const [yr,mo,dy] = e.date.split('-').map(Number);
@@ -567,7 +577,7 @@ function renderSharedSpace() {
     return;
   }
   el.innerHTML = sharedEvents.map(e => {
-    const cat = CAT[e.cat];
+    const cat = catOf(e.cat);
     const [yr,mo,dy] = e.date.split('-').map(Number);
     const mon = MONTHS_FULL[mo-1].slice(0,3).toUpperCase();
     return `<div class="shared-event-row">
@@ -736,7 +746,7 @@ function renderAdminEvents(filter) {
     return;
   }
   list.innerHTML = filtered.map(e => {
-    const cat = CAT[e.cat];
+    const cat = catOf(e.cat);
     const cc  = courseColor(e.course);
     const cl  = courseLabel(e.course);
     const [yr,mo,dy] = e.date.split('-').map(Number);
@@ -756,7 +766,7 @@ function renderAdminEvents(filter) {
         <div class="admin-list-meta">
           ${cat.label}
           ${cl ? `<span class="badge" style="background:${cc}18;color:${cc};font-size:10px;margin-left:4px">${cl}</span>` : ''}
-          ${e.eventbrite_url ? ` · <span style="color:#185FA5;font-size:10px">Eventbrite</span>` : ''}
+          ${e.eventbrite_url ? ` · <span style="color:#185FA5;font-size:10px">RSVP link</span>` : ''}
           ${e.note ? ' · ' + e.note.split('·')[0].trim() : ''}
         </div>
       </div>
@@ -950,7 +960,7 @@ function renderCalendar() {
     const evs = eventsForDate(dateStr);
     const maxShow = 2;
     const pills = evs.slice(0,maxShow).map(e => {
-      const cat = CAT[e.cat];
+      const cat = catOf(e.cat);
       const cc  = courseColor(e.course);
       return `<span class="cal-pill" style="background:${e.locked?'#f0f0f0':cat.bg};color:${e.locked?'#999':cat.color};border-left:2px solid ${e.locked?'#ccc':cc};${e.locked?'text-decoration:line-through':''}">
         ${e.hidden?'[hidden] ':''}${e.locked?'🔒 ':''}${e.mandatory?'★ ':''}${e.title}
@@ -1017,7 +1027,7 @@ function renderDayBody(dateStr) {
     return;
   }
   body.innerHTML = `<div class="panel-event-list">${evs.map(e => {
-    const cat   = CAT[e.cat];
+    const cat   = catOf(e.cat);
     const cc    = courseColor(e.course);
     const cl    = courseLabel(e.course);
     const adminBadges = !isStudentMode ? `
@@ -1027,7 +1037,7 @@ function renderDayBody(dateStr) {
     const mandatoryBadge = e.mandatory  ? `<span class="badge-mandatory" style="margin-left:4px">Required</span>` : '';
     const staffOnlyBadge = e.staffOnly  ? `<span class="badge" style="background:#F3EAF8;color:#7B3D8F;font-size:10px;margin-left:4px">Staff only</span>` : '';
     const calBtn  = `<button class="btn-sm" onclick="downloadIcs('${e.id}')" style="margin-top:8px;font-size:11px;display:inline-flex;align-items:center;gap:5px">📅 Add to calendar</button>`;
-    const ebBtn   = e.eventbrite_url ? `<a href="${e.eventbrite_url}" target="_blank" rel="noopener" class="btn-sm btn-primary" style="margin-top:8px;font-size:11px;display:inline-flex;align-items:center;gap:5px;text-decoration:none">🎟 Register on Eventbrite</a>` : '';
+    const ebBtn   = e.eventbrite_url ? `<a href="${e.eventbrite_url}" target="_blank" rel="noopener" class="btn-sm btn-primary" style="margin-top:8px;font-size:11px;display:inline-flex;align-items:center;gap:5px;text-decoration:none">🎟 RSVP / Register ↗</a>` : '';
     const descHtml = e.description ? `<div class="panel-event-desc">${e.description}</div>` : '';
     return `<div class="panel-event-item" style="${e.hidden&&!isStudentMode?'opacity:0.6':''}">
       <div class="panel-event-accent" style="background:${e.locked?'#ccc':cat.color}"></div>
@@ -1085,8 +1095,8 @@ function showAddForm() {
         <textarea class="form-input" id="fDesc" rows="3" placeholder="Longer description or context…"></textarea>
       </div>
       <div class="form-group">
-        <label class="form-label">Eventbrite URL <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
-        <input class="form-input" id="fEventbrite" type="url" placeholder="https://www.eventbrite.com/e/...">
+        <label class="form-label">RSVP / registration link <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
+        <input class="form-input" id="fEventbrite" type="url" placeholder="Google Form, Eventbrite, Calendly…">
       </div>
       <div class="form-group" style="display:flex;align-items:center;gap:10px">
         <input type="checkbox" id="fMandatory" style="width:16px;height:16px;accent-color:var(--maroon)">

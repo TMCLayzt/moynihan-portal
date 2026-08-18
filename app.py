@@ -184,7 +184,8 @@ def event_to_dict(rec):
         'id':             rec['id'],
         'title':          d.get('Title', ''),
         'date':           d.get('Date', ''),
-        'cat':            d.get('Category', 'lecture'),
+        # No default of 'lecture' — an untagged event would be mislabelled.
+        'cat':            d.get('Category') or 'general',
         # An untagged event shows to everyone rather than being attributed to
         # one course it may not belong to.
         'course':         d.get('Course') or JOINT_COURSE,
