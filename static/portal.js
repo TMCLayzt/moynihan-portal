@@ -715,7 +715,7 @@ async function deleteAnnouncement(id) {
    drifting out of sync with the first. */
 let editingEventId = null;
 
-const EVENT_FIELD_IDS = ['ev-title','ev-date','ev-note','ev-description','ev-eventbrite'];
+const EVENT_FIELD_IDS = ['ev-title','ev-date','ev-note','ev-description','ev-eventbrite','ev-start','ev-end'];
 
 function readEventForm() {
   return {
@@ -726,6 +726,8 @@ function readEventForm() {
     description:    document.getElementById('ev-description').value.trim(),
     eventbrite_url: document.getElementById('ev-eventbrite').value.trim(),
     required_for:   document.getElementById('ev-required-for').value,
+    start_time:     document.getElementById('ev-start').value,
+    end_time:       document.getElementById('ev-end').value,
     on_homepage:    document.getElementById('ev-homepage').checked,
     is_staff_only:  document.getElementById('ev-staff-only').checked,
     course:         document.getElementById('ev-course').value,
@@ -761,6 +763,8 @@ function startEditEvent(id) {
   document.getElementById('ev-required-for').value = e.required_for || 'none';
   document.getElementById('ev-staff-only').checked = !!e.staffOnly;
   document.getElementById('ev-homepage').checked   = !!e.onHomepage;
+  document.getElementById('ev-start').value        = e.start_time || '';
+  document.getElementById('ev-end').value          = e.end_time || '';
   document.getElementById('ev-course').value       = e.course || 'joint';
   setEventFormMode(true);
   document.getElementById('ev-title').scrollIntoView({ behavior: 'smooth', block: 'center' });

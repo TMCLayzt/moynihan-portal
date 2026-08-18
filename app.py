@@ -298,6 +298,8 @@ def event_to_dict(rec):
         # one course it may not belong to.
         'course':         d.get('Course') or JOINT_COURSE,
         'note':           d.get('Note', ''),
+        'start_time':     d.get('Start Time', ''),
+        'end_time':       d.get('End Time', ''),
         'description':    d.get('Description', ''),
         'eventbrite_url': d.get('Eventbrite URL', ''),
         # Who must attend, as opposed to who can see it. Falls back to the old
@@ -542,6 +544,8 @@ def create_event():
         'Note':           data.get('note', ''),
         'Description':    data.get('description', ''),
         'Eventbrite URL': data.get('eventbrite_url', ''),
+        'Start Time':     (data.get('start_time') or '').strip(),
+        'End Time':       (data.get('end_time') or '').strip(),
         'Required For':   data.get('required_for') or 'none',
         'Show On Homepage': bool(data.get('on_homepage')),
         'Course':         course,
@@ -567,6 +571,8 @@ def update_event(event_id):
         'eventbrite_url': 'Eventbrite URL',
         'course':         'Course',
         'required_for':   'Required For',
+        'start_time':     'Start Time',
+        'end_time':       'End Time',
     }
     bool_map = {
         'on_homepage':   'Show On Homepage',
@@ -618,6 +624,41 @@ def ics_fold(line):
     return '\r\n'.join(out)
 
 
+# Calendar clients need the zone spelled out, or a 3:30 PM seminar lands at the
+# reader's local 3:30 PM. New York rules, with DST.
+VTIMEZONE_NY = [
+    'BEGIN:VTIMEZONE',
+    'TZID:America/New_York',
+    'BEGIN:DAYLIGHT',
+    'TZOFFSETFROM:-0500',
+    'TZOFFSETTO:-0400',
+    'TZNAME:EDT',
+    'DTSTART:19700308T020000',
+    'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU',
+    'END:DAYLIGHT',
+    'BEGIN:STANDARD',
+    'TZOFFSETFROM:-0400',
+    'TZOFFSETTO:-0500',
+    'TZNAME:EST',
+    'DTSTART:19701101T020000',
+    'RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU',
+    'END:STANDARD',
+    'END:VTIMEZONE',
+]
+
+
+def hhmm(value):
+    """'15:30' -> '153000', or None if it isn't a usable time."""
+    try:
+        h, m = str(value).strip().split(':')
+        h, m = int(h), int(m)
+    except (ValueError, AttributeError):
+        return None
+    if not (0 <= h <= 23 and 0 <= m <= 59):
+        return None
+    return f'{h:02d}{m:02d}00'
+
+
 def build_ics(recs, cal_name):
     now_str = datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
     lines = [
@@ -628,7 +669,7 @@ def build_ics(recs, cal_name):
         'METHOD:PUBLISH',
         f'X-WR-CALNAME:{ics_escape(cal_name)}',
         'X-WR-TIMEZONE:America/New_York',
-    ]
+    ] + VTIMEZONE_NY
     for rec in recs:
         f = rec['fields']
         raw = (f.get('Date') or '').replace('-', '')
@@ -636,15 +677,26 @@ def build_ics(recs, cal_name):
             continue
         try:
             start = date(int(raw[:4]), int(raw[4:6]), int(raw[6:8]))
-            dtend = (start + timedelta(days=1)).strftime('%Y%m%d')
         except ValueError:
             continue
+
+        st, en = hhmm(f.get('Start Time')), hhmm(f.get('End Time'))
+        if st and en and en > st:
+            # A real appointment, in New York time.
+            dtstart = f'DTSTART;TZID=America/New_York:{raw}T{st}'
+            dtend   = f'DTEND;TZID=America/New_York:{raw}T{en}'
+        else:
+            # No time recorded — a genuine all-day entry, e.g. a college closure.
+            nextday = (start + timedelta(days=1)).strftime('%Y%m%d')
+            dtstart = f'DTSTART;VALUE=DATE:{raw}'
+            dtend   = f'DTEND;VALUE=DATE:{nextday}'
+
         lines += [
             'BEGIN:VEVENT',
             f"UID:event-{rec['id']}@moynihan-portal",
             f'DTSTAMP:{now_str}',
-            f'DTSTART;VALUE=DATE:{raw}',
-            f'DTEND;VALUE=DATE:{dtend}',
+            dtstart,
+            dtend,
             f"SUMMARY:{ics_escape(f.get('Title', ''))}",
         ]
         location = ics_escape((f.get('Note') or '').split('·')[0].strip())
