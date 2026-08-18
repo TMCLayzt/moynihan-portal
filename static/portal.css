@@ -1841,3 +1841,33 @@ body:not(.student-mode) .student-only { display: none !important; }
   .modal-card { box-shadow: none; max-width: 100%; margin: 0; }
   .form-modal-body { max-height: none; overflow: visible; }
 }
+
+/* ── CONTACT ROUTING (About page) ────────────────────────────────────────────
+   Two columns: what you're asking about, and who to ask. */
+.contact-routing {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid #eceae6;
+}
+.contact-routing-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  padding: 0.9rem 0;
+  border-bottom: 1px solid #eceae6;
+}
+.contact-routing-topic {
+  font-size: 13px;
+  color: var(--gray-brand);
+  line-height: 1.5;
+}
+.contact-routing-who {
+  font-size: 12px;
+  color: var(--gray-mid);
+  line-height: 1.6;
+}
+.contact-routing-who a { color: var(--maroon); text-decoration: none; }
+.contact-routing-who a:hover { text-decoration: underline; }
+@media (max-width: 640px) {
+  .contact-routing-row { grid-template-columns: 1fr; gap: 0.35rem; }
+}

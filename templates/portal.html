@@ -280,18 +280,33 @@
             </div>
             {% endfor %}
           </div>
-          <div class="section-label" style="margin-top:2.5rem">Contacts</div>
+          <div class="section-label" style="margin-top:2.5rem">Who to contact</div>
+          <div style="font-size:12px;color:var(--gray-mid);margin-bottom:1rem;line-height:1.7">
+            Not sure who to ask? Write to
+            <a href="mailto:{{ general_contact }}" style="color:var(--maroon)">{{ general_contact }}</a>
+            and it will reach the right person.
+          </div>
+          <div class="contact-routing">
+            {% for topic, who, email in contact_routing %}
+            <div class="contact-routing-row">
+              <div class="contact-routing-topic">{{ topic }}</div>
+              <div class="contact-routing-who">
+                {{ who }}<br>
+                <a href="mailto:{{ email }}">{{ email }}</a>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+
+          <div class="section-label" style="margin-top:2.5rem">Programme staff</div>
           <div class="about-contact-list">
+            {% for name, title, email in staff_directory %}
             <div class="about-contact-row">
-              <div class="about-contact-name">Moynihan Center</div>
-              <div class="about-contact-role">General fellowship enquiries</div>
-              <div class="about-contact-email"><a href="mailto:moynihancenter@ccny.cuny.edu">moynihancenter@ccny.cuny.edu</a></div>
+              <div class="about-contact-name">{{ name }}</div>
+              <div class="about-contact-role">{{ title }}</div>
+              <div class="about-contact-email"><a href="mailto:{{ email }}">{{ email }}</a></div>
             </div>
-            <div class="about-contact-row">
-              <div class="about-contact-name">Layana Abu Touq</div>
-              <div class="about-contact-role">Assistant Director</div>
-              <div class="about-contact-email"><a href="mailto:labutouq@ccny.cuny.edu">labutouq@ccny.cuny.edu</a></div>
-            </div>
+            {% endfor %}
           </div>
         </div>
 

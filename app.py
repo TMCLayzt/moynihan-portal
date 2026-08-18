@@ -101,6 +101,37 @@ AUDIENCE_META = {
     UNDERGRAD_TAG: {'code': 'Y1 & Y2',     'short': 'Y1 & Y2', 'color': '#BA7517'},
 }
 
+# Programme staff shown on the About page. Kept here rather than in Airtable
+# because it changes rarely; if it starts changing often it belongs in a table.
+STAFF_DIRECTORY = [
+    ('Carlo Invernizzi-Accetti', 'Executive Director',                'caccetti@ccny.cuny.edu'),
+    ('Michael Miller',           'Managing Director',                 'mmiller3@ccny.cuny.edu'),
+    ('Selena Rodriguez',         'Assistant Director, Operations',    'srodriguez5@ccny.cuny.edu'),
+    ('Layana Abu Touq',          'Assistant Director, Fellowships',   'labutouq@ccny.cuny.edu'),
+    ('Leanna K. Carroll',        'Fellowship Relations Manager',      'lcarroll@ccny.cuny.edu'),
+    ('Eliana Blam',              'Program Coordinator',               'eblam@ccny.cuny.edu'),
+    ('Catherine Lovizio',        'Communications Coordinator',        'catherine.lovizio10@login.cuny.edu'),
+    ('Kelly Matlock',            'Program Assistant',                 'kmatlock@ccny.cuny.edu'),
+    ('Stephanie Njeri',          'Program Assistant',                 'snjeri@ccny.cuny.edu'),
+]
+
+GENERAL_CONTACT = 'moynihancenter@ccny.cuny.edu'
+
+# Where to send a given question. Only routes that follow directly from a job
+# title — anything else would be guesswork a fellow would act on.
+CONTACT_ROUTING = [
+    ('Anything general, or if you are not sure who to ask',
+     'Moynihan Center', GENERAL_CONTACT),
+    ('Your fellowship, placement, or seminar',
+     'Layana Abu Touq — Assistant Director, Fellowships', 'labutouq@ccny.cuny.edu'),
+    ('Logistics, rooms, and operations',
+     'Selena Rodriguez — Assistant Director, Operations', 'srodriguez5@ccny.cuny.edu'),
+    ('Events, scheduling, and day-to-day programme questions',
+     'Eliana Blam — Program Coordinator', 'eblam@ccny.cuny.edu'),
+    ('Press, social media, and communications',
+     'Catherine Lovizio — Communications Coordinator', 'catherine.lovizio10@login.cuny.edu'),
+]
+
 STAFF_ROLES = ('admin', 'instructor', 'coordinator')
 
 app = Flask(__name__)
@@ -399,6 +430,9 @@ def index():
         public_ics_url=public_ics_url(),
         current_year=date.today().year,
         asset_version=asset_version(),
+        staff_directory=STAFF_DIRECTORY,
+        contact_routing=CONTACT_ROUTING,
+        general_contact=GENERAL_CONTACT,
     )
     resp = app.make_response(html)
     resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
@@ -1022,6 +1056,9 @@ def handle_404(e):
         public_ics_url=public_ics_url(),
         current_year=date.today().year,
         asset_version=asset_version(),
+        staff_directory=STAFF_DIRECTORY,
+        contact_routing=CONTACT_ROUTING,
+        general_contact=GENERAL_CONTACT,
     ), 404
 
 
