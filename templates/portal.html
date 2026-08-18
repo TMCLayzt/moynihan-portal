@@ -262,12 +262,14 @@
     <div class="section">
       <div class="grid-2" style="gap:3rem">
         <div>
-          <div class="section-label">About the fellowship</div>
+          <div class="section-label">About this portal</div>
           <div class="about-block">
-            <p>The Moynihan Center Fellowship at The City College of New York is a year-long academic and civic engagement program connecting undergraduate students to New York City&rsquo;s political landscape.</p>
-            <p>Fellows take part across {{ courses | length }} tracks:
-              {% for c in courses.values() %}<strong>{{ c.code }} &mdash; {{ c.title }}</strong>{% if not loop.last %}, {% endif %}{% endfor %}.</p>
-            <p>Through lectures, guest speakers, field experiences, and research projects, fellows develop practical skills in policy analysis, civic participation, and professional development.</p>
+            <p>The <strong>Moynihan Center</strong> at The City College of New York advances the twin
+              goals of public scholarship and public service, cultivating leaders who cross the
+              boundaries between critical thinking, public service practice, and popular communication.
+              It runs several distinct programmes and fellowships.</p>
+            <p>This portal covers the {{ courses | length }} cohorts below. Other Moynihan Center
+              programmes are not listed here.</p>
           </div>
 
           <div class="section-label" style="margin-top:2.5rem">Course details</div>
@@ -317,21 +319,21 @@
               <div class="manual-step">1</div>
               <div>
                 <div class="manual-title">Dashboard</div>
-                <div class="manual-desc">Your home base. See the latest announcements from your instructors, upcoming deadlines, and the next class sessions at a glance.</div>
+                <div class="manual-desc">The latest announcements from the Moynihan Center, plus upcoming events and deadlines. Use <strong>This week</strong>, <strong>This month</strong>, or <strong>All upcoming</strong> to change the range.</div>
               </div>
             </div>
             <div class="manual-item">
               <div class="manual-step">2</div>
               <div>
                 <div class="manual-title">Calendar</div>
-                <div class="manual-desc">Browse all events by month. Click any date to see details. Use the filter to switch between the master calendar and a single course. Click <strong>Add to calendar</strong> on any event to download a .ics file for Google Calendar, Apple Calendar, or Outlook.</div>
+                <div class="manual-desc">Browse by month and click any date for details. The pills switch between the master calendar and a single cohort; the coloured labels below them filter by type &mdash; click one to show only that kind of entry. <strong>Subscribe</strong> adds a live feed to Outlook, Google, or Apple Calendar that keeps itself up to date, and you can choose which cohort and whether to include the college calendar. <strong>Add to calendar</strong> on a single event downloads just that one.</div>
               </div>
             </div>
             <div class="manual-item">
               <div class="manual-step">3</div>
               <div>
                 <div class="manual-title">Resources</div>
-                <div class="manual-desc">Find links to important documents, forms, academic guides, housing resources, and more. Organized by category.</div>
+                <div class="manual-desc">Links to the forms, surveys, and guides related to your fellowship. Items marked <span class="badge-mandatory">Required</span> must be completed. Badges show which cohorts each item is for, and the pills at the top narrow the list to one cohort.</div>
               </div>
             </div>
           </div>
@@ -348,7 +350,7 @@
                 <div class="manual-step" style="background:#f5e8e8;color:var(--maroon)">A</div>
                 <div>
                   <div class="manual-title">Events &amp; calendar</div>
-                  <div class="manual-desc">Add events in <strong>Admin → Events</strong>. Fill in title, date, category, course, and optionally an Eventbrite URL, description, and check <strong>Required</strong> to mark mandatory attendance. You can also add events directly from the calendar by clicking any date.</div>
+                  <div class="manual-desc">Add or edit events in <strong>Admin → Events</strong>. Set the title, date, start and end times, category, and audience &mdash; a single cohort, <strong>Y1 &amp; Y2 only</strong>, or <strong>All fellows</strong>. <strong>Attendance</strong> controls who must attend, so a talk can be open to everyone but required only of undergraduates. Tick <strong>Show on homepage</strong> to list it under Upcoming dates. <strong>Hide</strong> keeps an event off the fellow view while you finalise details; <strong>Edit</strong> changes one in place.</div>
                 </div>
               </div>
             </div>
@@ -359,14 +361,14 @@
                 <div class="manual-step" style="background:#f5e8e8;color:var(--maroon)">B</div>
                 <div>
                   <div class="manual-title">Resources</div>
-                  <div class="manual-desc">In <strong>Admin → Resources</strong>, add links to documents, forms, or guides. Choose a category (General, Finance, Academic, Forms, Housing) and add a URL and description.</div>
+                  <div class="manual-desc">In <strong>Admin → Resources</strong>, add documents, forms, guides, and anything fellows must complete. Choose a category, tick which cohorts it applies to (none means everyone), and mark it <strong>Required</strong> if it has to be done. <strong>Hide</strong> parks an item without deleting it &mdash; useful for surveys that don't exist yet &mdash; and <strong>Show</strong> brings it back.</div>
                 </div>
               </div>
               <div class="manual-item">
                 <div class="manual-step" style="background:#f5e8e8;color:var(--maroon)">C</div>
                 <div>
-                  <div class="manual-title">Announcements with week tags</div>
-                  <div class="manual-desc">When posting an announcement, you can add a <strong>week number</strong>. Students will see announcements filtered to the current week when you set a filter, or all announcements if no filter is active.</div>
+                  <div class="manual-title">Announcements</div>
+                  <div class="manual-desc">Post announcements in <strong>Admin → Announcements</strong>. <strong>Show until</strong> sets a date after which it drops off the homepage by itself &mdash; use it for anything time-bound so old notices don't pile up. <strong>Pin to top</strong> holds one above the rest. Expired announcements stay visible to staff, flagged, so you can repost or reuse them.</div>
                 </div>
               </div>
             </div>
