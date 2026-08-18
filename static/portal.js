@@ -9,12 +9,15 @@ const CATS = [
   { id:'guest',       label:'Guest speaker',       color:'#185FA5', bg:'#E6F1FB' },
   { id:'milestone',   label:'Events',              color:'#BA7517', bg:'#FAEEDA' },
   // CUNY academic calendar, not fellowship programming
-  { id:'academic',    label:'CUNY academic date',  color:'#3D5A80', bg:'#E8EEF5' },
-  { id:'closed',      label:'No classes / closed', color:'#6E6E73', bg:'#EDEDEE' },
+  { id:'academic',    label:'CUNY Calendar',       color:'#6E6E73', bg:'#EDEDEE' },
   { id:'general',     label:'Other',               color:'#6b6b6b', bg:'#f4f3f0' },
 ];
 const CAT = {};
 CATS.forEach(c => CAT[c.id] = c);
+/* Closures and deadlines used to be separate categories. They're one "CUNY
+   Calendar" category now; this alias keeps any record still tagged 'closed'
+   rendering correctly without appearing twice in the legend. */
+CAT.closed = CAT.academic;
 
 /* Safe lookup: an unrecognised or blank category (e.g. typed straight into
    Airtable) renders as neutral "Other" rather than mislabelling the event. */
