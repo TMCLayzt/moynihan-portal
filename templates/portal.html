@@ -87,6 +87,7 @@
       <nav class="topbar-nav" aria-label="Main navigation">
         <a class="subnav-link active" onclick="showView('dashboard')">Dashboard</a>
         <a class="subnav-link" onclick="showView('calendar')">Calendar</a>
+        <a class="subnav-link" onclick="showView('requirements')">Requirements</a>
         <a class="subnav-link" onclick="showView('resources')">Resources</a>
         <a class="subnav-link" onclick="showView('about')">About</a>
         <a class="subnav-link admin-only" onclick="showView('admin')" id="adminNavLink">&#9881; Admin</a>
@@ -232,6 +233,29 @@
 <!-- ═══════════════════════════════════════
      RESOURCES VIEW
 ════════════════════════════════════════ -->
+<div id="view-requirements" class="view">
+  <div class="page-hero">
+    <div class="page-hero-inner">
+      <div>
+        <div class="page-hero-meta">Paperwork, payroll, and surveys</div>
+        <h1>Program <strong>Requirements</strong></h1>
+      </div>
+    </div>
+  </div>
+  <div class="container">
+    <div class="section">
+      <div style="font-size:13px;color:var(--gray-mid);margin-bottom:2rem;line-height:1.7;max-width:640px">
+        Everything you need to complete as a fellow. Items marked
+        <span class="badge-mandatory">Required</span> must be finished to stay in
+        good standing. Keep your own record of what you've done &mdash; the portal
+        doesn't track individual progress.
+      </div>
+      <div id="requirementsList"></div>
+    </div>
+  </div>
+</div>
+
+
 <div id="view-resources" class="view">
   <div class="page-hero">
     <div class="page-hero-inner">
@@ -286,9 +310,18 @@
               <div class="about-contact-email">NAC 4/133</div>
             </div>
           </div>
-          <div style="font-size:12px;color:var(--gray-mid);margin-top:1rem;line-height:1.7">
-            For questions about the fellowship or a specific event, contact the
-            Moynihan Center program staff.
+          <div class="section-label" style="margin-top:2.5rem">Contacts</div>
+          <div class="about-contact-list">
+            <div class="about-contact-row">
+              <div class="about-contact-name">Moynihan Center</div>
+              <div class="about-contact-role">General fellowship enquiries</div>
+              <div class="about-contact-email"><a href="mailto:moynihancenter@ccny.cuny.edu">moynihancenter@ccny.cuny.edu</a></div>
+            </div>
+            <div class="about-contact-row">
+              <div class="about-contact-name">Layana Abu Touq</div>
+              <div class="about-contact-role">Assistant Director</div>
+              <div class="about-contact-email"><a href="mailto:labutouq@ccny.cuny.edu">labutouq@ccny.cuny.edu</a></div>
+            </div>
           </div>
         </div>
 
@@ -368,6 +401,7 @@
   <div class="admin-tab-bar">
     <button class="admin-tab active" onclick="switchAdminTab('announcements')">Announcements</button>
     <button class="admin-tab" onclick="switchAdminTab('events')">Events</button>
+    <button class="admin-tab" onclick="switchAdminTab('requirements')">Requirements</button>
     <button class="admin-tab" onclick="switchAdminTab('resources')">Resources</button>
     <button class="admin-tab" onclick="switchAdminTab('users')">Admin users</button>
     <span id="adminCourseIndicator" style="margin-left:auto;font-size:11px;color:var(--gray-mid);align-self:center;padding-right:1rem;white-space:nowrap"></span>
@@ -476,7 +510,44 @@
     </div>
 
     <!-- ── RESOURCES ── -->
-    <div class="admin-panel" id="apanel-resources">
+    <div class="admin-panel" id="apanel-requirements">
+  <div class="admin-section-head">
+    <div>
+      <div class="admin-section-title">Program requirements</div>
+      <div class="admin-section-sub">Shown to all fellows as a read-only list. There are no
+        checkboxes &mdash; fellows share one access code, so per-person progress can't be tracked.</div>
+    </div>
+  </div>
+  <div class="admin-form">
+    <div class="admin-row-2">
+      <div class="form-group"><label class="form-label">Title</label>
+        <input class="form-input" id="rq-title" type="text" placeholder="e.g. Submit W-9 tax form"></div>
+      <div class="form-group"><label class="form-label">Category</label>
+        <select class="form-input" id="rq-cat">
+          <option value="finance">Finance &amp; payroll</option>
+          <option value="survey">Surveys &amp; reports</option>
+          <option value="general">General</option>
+        </select></div>
+    </div>
+    <div class="form-group"><label class="form-label">Description</label>
+      <textarea class="form-input" id="rq-desc" rows="2" placeholder="What the fellow needs to do…"></textarea></div>
+    <div class="admin-row-2">
+      <div class="form-group"><label class="form-label">Link <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
+        <input class="form-input" id="rq-link" type="url" placeholder="Google Form, DocuSign, CUNYfirst…"></div>
+      <div class="form-group"><label class="form-label">Due label <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
+        <input class="form-input" id="rq-due" type="text" placeholder="e.g. By Sept 15"></div>
+    </div>
+    <div class="form-group" style="display:flex;align-items:center;gap:10px">
+      <input type="checkbox" id="rq-required" checked>
+      <label for="rq-required" style="font-size:13px;cursor:pointer">Required to stay in good standing</label>
+    </div>
+    <button class="admin-btn-primary" onclick="addRequirement()">Add requirement</button>
+    <div class="form-error" id="rq-error"></div>
+  </div>
+  <div id="adminRequirementsList"></div>
+</div>
+
+<div class="admin-panel" id="apanel-resources">
       <div class="admin-section-header">
         <div>
           <div class="admin-section-title">Resources</div>

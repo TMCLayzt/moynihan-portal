@@ -49,6 +49,12 @@ const COURSE_LABELS = {
   psc31330: 'Year 2 only',
 };
 
+const REQUIREMENT_CATS = {
+  finance: { label:'Finance & payroll',   color:'#1D9E75' },
+  survey:  { label:'Surveys & reports',   color:'#185FA5' },
+  general: { label:'General',             color:'#6b6b6b' },
+};
+
 const RESOURCE_CATS = {
   general:  { label:'General',         color:'#6b6b6b' },
   finance:  { label:'Finance & Stipends', color:'#1D9E75' },
@@ -62,6 +68,7 @@ const RESOURCE_CATS = {
 let ALL_EVENTS    = [];
 let announcements = [];
 let resources     = [];
+let requirements  = [];
 let adminUsers    = [];
 
 // Keys match Airtable's Course field values; only labels are display text.
@@ -205,19 +212,22 @@ async function api(method, path, body, { retries = 2 } = {}) {
 // ── POST-LOGIN DATA LOADER ────────────────────────────────────────────────────
 
 async function loadPortalData() {
-  const [evRes, annRes, resRes] = await Promise.all([
+  const [evRes, annRes, resRes, reqRes] = await Promise.all([
     api('GET', '/api/events'),
     api('GET', '/api/announcements'),
     api('GET', '/api/resources'),
+    api('GET', '/api/requirements'),
   ]);
 
   const evData  = await evRes.json();
   const annData = await annRes.json();
   const resData = await resRes.json();
+  const reqData = await reqRes.json();
 
   ALL_EVENTS    = Array.isArray(evData)  ? evData.map(transformEvent) : [];
   announcements = Array.isArray(annData) ? annData : [];
   resources     = Array.isArray(resData) ? resData : [];
+  requirements  = Array.isArray(reqData) ? reqData : [];
 
   updateCourseEvents();
 
@@ -355,6 +365,7 @@ async function logout() {
   ALL_EVENTS    = [];
   announcements = [];
   resources     = [];
+  requirements  = [];
   adminUsers    = [];
   updateCourseEvents();
   ['accessCode', 'loginUser', 'loginPass'].forEach(id => {
@@ -379,6 +390,7 @@ function showView(name) {
   });
   if (name === 'calendar')  renderCalendar();
   if (name === 'dashboard') renderDashboard();
+  if (name === 'requirements') renderRequirements();
   if (name === 'resources') renderResources();
   if (name === 'about')     renderAbout();
   if (name === 'admin') {
@@ -869,6 +881,7 @@ function switchAdminTab(name) {
   if (name === 'announcements') renderAdminAnnouncements();
   if (name === 'events')        renderAdminEvents(eventsFilter);
   if (name === 'users')         renderAdminUsers();
+  if (name === 'requirements')  renderAdminRequirements();
   if (name === 'resources')     renderAdminResources();
 }
 
@@ -1188,6 +1201,105 @@ function closePanel() {
   document.getElementById('panelOverlay').classList.remove('open');
   document.getElementById('panelAddBtn').style.display = '';
   panelMode = null; selectedDate = null;
+}
+
+
+// ── PROGRAM REQUIREMENTS ──────────────────────────────────────────────────────
+
+/* Read-only for fellows. No checkboxes: everyone shares one access code, so a
+   tick would be visible to every fellow rather than personal. */
+function renderRequirements() {
+  const el = document.getElementById('requirementsList');
+  if (!el) return;
+  if (!requirements.length) {
+    el.innerHTML = `<div style="font-size:13px;color:var(--gray-mid);padding:2rem 0;text-align:center">No requirements posted yet.</div>`;
+    return;
+  }
+  const cats = ['finance', 'survey', 'general']
+    .filter(c => requirements.some(r => r.category === c));
+  const others = [...new Set(requirements.map(r => r.category))].filter(c => !cats.includes(c));
+
+  el.innerHTML = [...cats, ...others].map(cat => {
+    const cl    = REQUIREMENT_CATS[cat] || { label: cat, color: '#6b6b6b' };
+    const items = requirements.filter(r => r.category === cat);
+    return `<div class="resource-cat-section">
+      <div class="resource-cat-title" style="color:${cl.color}">${cl.label}</div>
+      <div class="resource-items-grid">
+        ${items.map(r => {
+          const link = r.link
+            ? `<span class="btn-sm" style="margin-top:10px;font-size:11px;display:inline-flex;align-items:center;gap:5px">Open ↗</span>`
+            : '';
+          const inner = `
+            <div class="resource-card-title">${r.title}${r.is_required ? ` <span class="badge-mandatory" style="margin-left:4px">Required</span>` : ''}</div>
+            ${r.description ? `<div class="resource-card-desc">${r.description}</div>` : ''}
+            ${r.due_label ? `<div style="font-size:11px;color:${cl.color};margin-top:8px;font-weight:600">${r.due_label}</div>` : ''}
+            ${link}`;
+          return r.link
+            ? `<a href="${r.link}" target="_blank" rel="noopener" class="resource-card">${inner}</a>`
+            : `<div class="resource-card" style="cursor:default">${inner}</div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderAdminRequirements() {
+  const el = document.getElementById('adminRequirementsList');
+  if (!el) return;
+  if (!requirements.length) {
+    el.innerHTML = `<div style="font-size:13px;color:var(--gray-mid);padding:1.5rem 0">Nothing posted yet.</div>`;
+    return;
+  }
+  el.innerHTML = requirements.map(r => {
+    const cl = REQUIREMENT_CATS[r.category] || { label: r.category, color: '#6b6b6b' };
+    return `<div class="admin-list-item">
+      <div class="admin-list-accent" style="background:${cl.color}"></div>
+      <div class="admin-list-body">
+        <div class="admin-list-title">${r.title}${r.is_required ? ` <span class="badge-mandatory" style="margin-left:4px">Required</span>` : ''}</div>
+        <div class="admin-list-meta">
+          <span style="color:${cl.color}">${cl.label}</span>
+          ${r.due_label ? ` · ${r.due_label}` : ''}
+          ${r.link ? ` · <span style="color:#185FA5;font-size:10px">link set</span>` : ''}
+        </div>
+        ${r.description ? `<div class="admin-list-desc">${r.description}</div>` : ''}
+      </div>
+      <div class="admin-list-actions">
+        <button class="admin-btn-danger" onclick="deleteRequirement('${r.id}')">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function addRequirement() {
+  const title = document.getElementById('rq-title').value.trim();
+  const err   = document.getElementById('rq-error');
+  err.textContent = '';
+  if (!title) { err.textContent = 'Title is required.'; return; }
+  const res = await api('POST', '/api/requirements', {
+    title,
+    description: document.getElementById('rq-desc').value.trim(),
+    category:    document.getElementById('rq-cat').value,
+    link:        document.getElementById('rq-link').value.trim(),
+    due_label:   document.getElementById('rq-due').value.trim(),
+    is_required: document.getElementById('rq-required').checked,
+  });
+  const data = await res.json();
+  if (!res.ok) { err.textContent = data.error || 'Could not add that.'; return; }
+  requirements.push(data);
+  requirements.sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
+  ['rq-title','rq-desc','rq-link','rq-due'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('rq-required').checked = true;
+  renderAdminRequirements();
+  renderRequirements();
+}
+
+async function deleteRequirement(id) {
+  if (!confirm('Delete this requirement?')) return;
+  const res = await api('DELETE', `/api/requirements/${id}`);
+  if (!res.ok) { alert('Could not delete that.'); return; }
+  requirements = requirements.filter(r => r.id !== id);
+  renderAdminRequirements();
+  renderRequirements();
 }
 
 
