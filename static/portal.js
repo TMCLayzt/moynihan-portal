@@ -1,7 +1,7 @@
 // ── CONSTANTS ────────────────────────────────────────────────────────────────
 
 const CATS = [
-  { id:'lecture',     label:'Lecture / class',     color:'#8B1A1A', bg:'#f5e8e8' },
+  { id:'lecture',     label:'Seminars',            color:'#8B1A1A', bg:'#f5e8e8' },
   { id:'meeting',     label:'Meeting / check-in',  color:'#7B3D8F', bg:'#F3EAF8' },
   { id:'reading',     label:'Reading / prep',      color:'#1D9E75', bg:'#E1F5EE' },
   { id:'homework',    label:'Homework deadline',   color:'#D85A30', bg:'#FAECE7' },
@@ -107,6 +107,7 @@ let currentUserName  = '';
 let currentFirstName = '';
 let activeCourse     = 'all';
 let calFilterCourse  = 'all';
+const calTypeFilter  = new Set();   // empty = every type
 
 // Default calendar to current month
 const _now = new Date();
@@ -938,14 +939,33 @@ function pillColors(e) {
   return { color: cat.color, bg: cat.bg };
 }
 
-function getVisibleEvents() {
+function courseFilteredEvents() {
   let evs;
-  if      (calFilterCourse === 'all')      evs = ALL_EVENTS;
-  else if (calFilterCourse === 'psc31180') evs = ALL_EVENTS.filter(e => e.course === 'psc31180' || e.course === 'joint');
+  if      (calFilterCourse === 'psc31180') evs = ALL_EVENTS.filter(e => e.course === 'psc31180' || e.course === 'joint');
   else if (calFilterCourse === 'psc31330') evs = ALL_EVENTS.filter(e => e.course === 'psc31330' || e.course === 'joint');
   else evs = ALL_EVENTS;
   if (isStudentMode) evs = evs.filter(e => !e.hidden);
   return evs;
+}
+
+function getVisibleEvents() {
+  const evs = courseFilteredEvents();
+  if (!calTypeFilter.size) return evs;
+  return evs.filter(e => calTypeFilter.has(e.cat));
+}
+
+/* Clicking a legend badge narrows the calendar to that type. Clicking the first
+   one isolates it; further clicks add or remove types; clearing them all returns
+   to showing everything. */
+function toggleTypeFilter(id) {
+  if (calTypeFilter.has(id)) calTypeFilter.delete(id);
+  else                       calTypeFilter.add(id);
+  renderCalendar();
+}
+
+function clearTypeFilter() {
+  calTypeFilter.clear();
+  renderCalendar();
 }
 function eventsForDate(dateStr) { return getVisibleEvents().filter(e => e.date === dateStr); }
 
@@ -1002,9 +1022,27 @@ function renderCalendar() {
       ? `${c.code} — ${c.title}`
       : `${COURSES.psc31180.title}  ·  ${COURSES.psc31330.title}`;
   }
-  document.getElementById('calLegend').innerHTML = CATS.map(c =>
-    `<div class="cal-legend-item"><span class="cal-legend-badge" style="background:${c.bg};color:${c.color};border-color:${c.color}40">${c.label}</span></div>`
-  ).join('');
+  const present = courseFilteredEvents();
+  const counts  = {};
+  present.forEach(e => { counts[e.cat] = (counts[e.cat] || 0) + 1; });
+  const shown   = CATS.filter(c => counts[c.id]);
+  const filtering = calTypeFilter.size > 0;
+
+  document.getElementById('calLegend').innerHTML =
+    shown.map(c => {
+      const on = !filtering || calTypeFilter.has(c.id);
+      return `<div class="cal-legend-item">
+        <button class="cal-legend-badge${on ? '' : ' off'}" onclick="toggleTypeFilter('${c.id}')"
+                title="${on && filtering ? 'Click to remove' : 'Click to show only this'}"
+                style="background:${on ? c.bg : 'transparent'};color:${c.color};border-color:${c.color}40">
+          ${c.label} <span style="opacity:0.55;font-weight:500">${counts[c.id]}</span>
+        </button>
+      </div>`;
+    }).join('')
+    + (filtering
+        ? `<div class="cal-legend-item"><button class="cal-legend-badge" onclick="clearTypeFilter()"
+             style="background:transparent;color:var(--gray-mid);border-color:#d8d5d0">Show all types ✕</button></div>`
+        : `<div class="cal-legend-item"><span style="font-size:10px;color:var(--gray-mid);align-self:center;padding-left:4px">click to filter</span></div>`);
   document.getElementById('calGridHeader').innerHTML = DAYS_SHORT.map(d => `<div>${d}</div>`).join('');
 
   const today    = new Date();
