@@ -763,12 +763,16 @@ def calendar_feed():
         return Response('Unauthorized — missing or invalid token',
                         status=401, mimetype='text/plain')
 
-    formula = build_event_formula(include_staff_only, request.args.get('course', ''))
+    course  = request.args.get('course', '')
+    formula = build_event_formula(include_staff_only, course)
     recs = events_table.all(formula=formula, sort=['Date']) if formula \
         else events_table.all(sort=['Date'])
 
     track('ics_feed')
-    name = f'Moynihan Fellowship — {SEMESTER_LABEL}'
+    name = 'Moynihan Fellowship'
+    if course in COURSES:
+        name += f' — {COURSES[course]["code"]}'
+    name += f' — {SEMESTER_LABEL}'
     if include_staff_only:
         name += ' (Staff)'
     return Response(

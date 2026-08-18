@@ -1690,13 +1690,54 @@ document.addEventListener('click', e => {
 
 // ── CALENDAR SUBSCRIBE MODAL ──────────────────────────────────────────────────
 
-function getIcsUrl() {
+/* Which calendar the subscribe modal will hand over. Defaults to whatever the
+   fellow is looking at, so filtering to Senior Fellows and hitting Subscribe
+   doesn't quietly sign them up to every undergraduate seminar. */
+let subscribeScope = 'all';
+
+function getIcsUrl(scope) {
   const meta = document.querySelector('meta[name="ics-url"]');
-  return meta ? meta.content : '';
+  if (!meta) return '';
+  const base = meta.content;
+  const use  = scope === undefined ? subscribeScope : scope;
+  if (!COURSES[use]) return base;
+  return base + (base.includes('?') ? '&' : '?') + 'course=' + encodeURIComponent(use);
+}
+
+function setSubscribeScope(id) {
+  subscribeScope = id;
+  renderSubscribeScope();
+  const el = document.getElementById('icsUrlDisplay');
+  if (el) el.value = getIcsUrl();
+}
+
+function renderSubscribeScope() {
+  const bar = document.getElementById('subscribeScopeBar');
+  if (bar) {
+    const opts = [{ id:'all', label:'Everything', color:'#BA7517' },
+      ...Object.values(COURSES).map(c => ({ id:c.id, label:c.code, color:c.color }))];
+    bar.innerHTML = opts.map(o =>
+      `<button class="cal-filter-pill${subscribeScope===o.id?' active':''}" onclick="setSubscribeScope('${o.id}')">
+        <div class="cal-filter-pill-dot" style="background:${o.color}"></div>${o.label}
+      </button>`).join('');
+  }
+  const note = document.getElementById('subscribeScopeNote');
+  if (note) {
+    const scoped = COURSES[subscribeScope]
+      ? ALL_EVENTS.filter(e => appliesTo(e, subscribeScope) && !e.hidden)
+      : ALL_EVENTS.filter(e => !e.hidden);
+    const label = COURSES[subscribeScope]
+      ? `${COURSES[subscribeScope].code} — their sessions plus anything open to all fellows`
+      : 'Every cohort’s sessions and the college calendar';
+    note.innerHTML = `<strong>${scoped.length} events.</strong> ${label}.`;
+  }
 }
 
 function openCalSubscribeModal() {
   api('POST', '/api/track', { metric: 'calendar_subscribe' }, { retries: 0 }).catch(() => {});
+  // Start from what they're currently looking at.
+  subscribeScope = COURSES[calFilterCourse] ? calFilterCourse : 'all';
+  renderSubscribeScope();
   const url = getIcsUrl();
   const el = document.getElementById('icsUrlDisplay');
   if (el) el.value = url;
@@ -1711,7 +1752,10 @@ function subscribeCalendar(provider) {
   const icsUrl  = getIcsUrl();
   const webcal  = icsUrl.replace(/^https?:/, 'webcal:');
   const encoded = encodeURIComponent(icsUrl);
-  const name    = encodeURIComponent('Moynihan Center Fellowship');
+  // Name it for the scope, so a Senior Fellows subscription isn't just
+  // "Moynihan Center Fellowship" sitting next to someone else's.
+  const scoped  = COURSES[subscribeScope];
+  const name    = encodeURIComponent('Moynihan Fellowship' + (scoped ? ` — ${scoped.code}` : ''));
   const urls = {
     google:    `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`,
     outlook:   `https://outlook.live.com/calendar/0/addfromweb?url=${encoded}&name=${name}`,
