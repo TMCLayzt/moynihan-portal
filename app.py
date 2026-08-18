@@ -392,6 +392,7 @@ def resource_to_dict(rec):
         'audience':    d.get('Audience') or [],
         'is_required': 1 if d.get('Is Required') else 0,
         'due_label':   d.get('Due Label', ''),
+        'is_active':   1 if d.get('Is Active') else 0,
         'order_index': d.get('Order Index', 0),
     }
 
@@ -889,8 +890,13 @@ def delete_announcement(ann_id):
 @app.route('/api/resources')
 @login_required
 def get_resources():
-    recs = resources_table.all(formula='{Is Active}=1',
-                               sort=['Category', 'Order Index'])
+    """Students get live items only. Staff get hidden ones too, flagged, so a
+    resource can be parked and brought back from the portal rather than Airtable."""
+    if is_staff():
+        recs = resources_table.all(sort=['Category', 'Order Index'])
+    else:
+        recs = resources_table.all(formula='{Is Active}=1',
+                                   sort=['Category', 'Order Index'])
     return jsonify([resource_to_dict(r) for r in recs])
 
 
@@ -938,6 +944,8 @@ def update_resource(res_id):
         updates['Audience'] = [a for a in aud if a in COURSES]
     if 'is_required' in data:
         updates['Is Required'] = bool(data['is_required'])
+    if 'is_active' in data:
+        updates['Is Active'] = bool(data['is_active'])
     if not updates:
         return jsonify({'error': 'Nothing to update.'}), 400
     return jsonify(resource_to_dict(

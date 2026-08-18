@@ -1514,9 +1514,10 @@ function renderResources() {
       </button>`).join('');
   }
 
+  const live = isStudentMode ? resources.filter(r => r.is_active) : resources.filter(r => r.is_active);
   const shown = COURSES[resFilterCourse]
-    ? resources.filter(r => resourceAppliesTo(r, resFilterCourse))
-    : resources;
+    ? live.filter(r => resourceAppliesTo(r, resFilterCourse))
+    : live;
 
   const cats = [...new Set(shown.map(r => r.category))];
   if (!shown.length) {
@@ -1561,10 +1562,11 @@ function renderAdminResources() {
   }
   el.innerHTML = resources.map(r => {
     const cl = RESOURCE_CATS[r.category] || { label: r.category, color: '#6b6b6b' };
-    return `<div class="admin-list-row">
+    return `<div class="admin-list-row" style="${r.is_active ? '' : 'opacity:0.55'}">
       <div class="admin-list-accent" style="background:${cl.color}"></div>
       <div class="admin-list-body">
-        <div class="admin-list-title">${r.is_required ? '★ ' : ''}${r.title}</div>
+        <div class="admin-list-title">${r.is_required ? '★ ' : ''}${r.title}${
+          r.is_active ? '' : ` <span class="badge" style="background:#eee;color:#666;font-size:10px;margin-left:4px">Hidden from fellows</span>`}</div>
         <div class="admin-list-meta">
           <span style="color:${cl.color}">${cl.label}</span>
           · ${(r.audience && r.audience.length)
@@ -1576,6 +1578,7 @@ function renderAdminResources() {
         ${r.description ? `<div class="admin-list-meta" style="margin-top:3px">${r.description.slice(0,80)}${r.description.length>80?'…':''}</div>` : ''}
       </div>
       <div class="admin-list-actions" style="gap:6px">
+        <button class="admin-btn-secondary" style="padding:5px 10px;font-size:10px" onclick="toggleResourceActive('${r.id}')">${r.is_active ? 'Hide' : 'Show'}</button>
         <button class="admin-btn-secondary" style="padding:5px 10px;font-size:10px" onclick="startEditResource('${r.id}')">Edit</button>
         <button class="admin-btn-danger" onclick="deleteResource('${r.id}')">Delete</button>
       </div>
@@ -1632,6 +1635,18 @@ function cancelEditResource() {
   editingResourceId = null;
   clearResourceForm();
   setResourceFormMode(false);
+}
+
+async function toggleResourceActive(id) {
+  const r = resources.find(x => x.id === id);
+  if (!r) return;
+  const res = await api('PATCH', `/api/resources/${id}`, { is_active: r.is_active ? 0 : 1 });
+  if (!res.ok) return;
+  const data = await res.json();
+  const i = resources.findIndex(x => x.id === id);
+  if (i > -1) resources[i] = data;
+  renderAdminResources();
+  renderResources();
 }
 
 async function submitResource() {
