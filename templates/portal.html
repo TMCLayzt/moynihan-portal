@@ -146,7 +146,7 @@
   <div class="page-hero">
     <div class="page-hero-inner">
       <div>
-        <div class="page-hero-meta">Year 1 &mdash; NYC Politics</div>
+        <div class="page-hero-meta">Year 1 &mdash; Politics, Power, and Policy in New York City</div>
         <h1>Welcome back, <strong>Fellow.</strong><br>{{ semester }} is underway.</h1>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px;">
@@ -187,7 +187,7 @@
     <!-- Fellowship shared space — visible to all fellows -->
     <div class="section">
       <div class="section-label">Fellowship &mdash; {{ semester }} shared events</div>
-      <div style="font-size:12px;color:var(--gray-mid);margin-bottom:1rem">Events open to both Year 1 and Year 2 fellows.</div>
+      <div style="font-size:12px;color:var(--gray-mid);margin-bottom:1rem">Events open to fellows in both courses.</div>
       <div id="fellowshipSharedSpace"></div>
     </div>
   </div>
@@ -202,7 +202,7 @@
   <div class="page-hero">
     <div class="page-hero-inner">
       <div>
-        <div class="page-hero-meta" id="calHeroMeta">Year 1 &amp; Year 2 &mdash; Moynihan Center Fellowship</div>
+        <div class="page-hero-meta" id="calHeroMeta">Politics, Power, and Policy in New York City &nbsp;&middot;&nbsp; Philanthropy and the Public Good</div>
         <h1>{{ semester }} <strong>Course Calendar</strong></h1>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
@@ -269,22 +269,26 @@
           <div class="section-label">About the fellowship</div>
           <div class="about-block">
             <p>The Moynihan Center Fellowship at The City College of New York is a year-long academic and civic engagement program connecting undergraduate students to New York City&rsquo;s political landscape.</p>
-            <p>Fellows participate in two parallel tracks: <strong>Year 1 &mdash; NYC Politics</strong> (led by Layana Abu Touq) and <strong>Year 2 &mdash; Philanthropy</strong> (led by Dr. Michael Miller).</p>
+            <p>Fellows participate in two parallel tracks: <strong>Year 1 &mdash; Politics, Power, and Policy in New York City</strong> and <strong>Year 2 &mdash; Philanthropy and the Public Good</strong>.</p>
             <p>Through lectures, guest speakers, field experiences, and research projects, fellows develop practical skills in policy analysis, civic participation, and professional development.</p>
           </div>
 
-          <div class="section-label" style="margin-top:2.5rem">Contacts</div>
+          <div class="section-label" style="margin-top:2.5rem">Course details</div>
           <div class="about-contact-list">
             <div class="about-contact-row">
-              <div class="about-contact-name">Layana Abu Touq</div>
-              <div class="about-contact-role">Instructor, Year 1 &mdash; NYC Politics</div>
-              <div class="about-contact-email">Labutouq@ccny.cuny.edu</div>
+              <div class="about-contact-name">Year 1 &mdash; Politics, Power, and Policy in New York City</div>
+              <div class="about-contact-role">Mondays &amp; Wednesdays, 3:30&ndash;4:45 PM</div>
+              <div class="about-contact-email">Shepard Hall, SH 107</div>
             </div>
             <div class="about-contact-row">
-              <div class="about-contact-name">Dr. Michael Miller</div>
-              <div class="about-contact-role">Instructor, Year 2 &mdash; Philanthropy</div>
-              <div class="about-contact-email">mmiller3@ccny.cuny.edu</div>
+              <div class="about-contact-name">Year 2 &mdash; Philanthropy and the Public Good</div>
+              <div class="about-contact-role">Wednesdays, 2:00&ndash;4:30 PM</div>
+              <div class="about-contact-email">NAC 4/133</div>
             </div>
+          </div>
+          <div style="font-size:12px;color:var(--gray-mid);margin-top:1rem;line-height:1.7">
+            For questions about the fellowship or a specific event, contact the
+            Moynihan Center program staff.
           </div>
         </div>
 
@@ -435,8 +439,8 @@
           <div class="form-group"><label class="form-label">Location / short note</label><input class="form-input" id="ev-note" type="text" placeholder="e.g. NAC 4/133 · 3:30–5:00 PM"></div>
           <div class="form-group"><label class="form-label">Course</label>
             <select class="form-input" id="ev-course">
-              <option value="psc31180">Year 1 — NYC Politics</option>
-              <option value="psc31330">Year 2 — Philanthropy</option>
+              <option value="psc31180">Year 1 — Politics, Power, and Policy in NYC</option>
+              <option value="psc31330">Year 2 — Philanthropy and the Public Good</option>
               <option value="joint">Joint / both cohorts</option>
             </select>
           </div>
@@ -550,11 +554,10 @@
 
 <footer>
   <div class="footer-inner">
-    <span class="footer-copy">&copy; {{ current_year }} The Moynihan Center &mdash; Year 1 (Abu Touq) &amp; Year 2 (Miller) &mdash; {{ semester }}</span>
+    <span class="footer-copy">&copy; {{ current_year }} The Moynihan Center &mdash; The City College of New York &mdash; {{ semester }}</span>
     <div class="footer-links">
-      <a href="#">Brightspace</a>
-      <a href="#">CCNY Portal</a>
-      <a href="#">mmiller3@ccny.cuny.edu</a>
+      <a href="https://brightspace.cuny.edu" target="_blank" rel="noopener">Brightspace</a>
+      <a href="https://www.ccny.cuny.edu" target="_blank" rel="noopener">CCNY</a>
     </div>
   </div>
 </footer>

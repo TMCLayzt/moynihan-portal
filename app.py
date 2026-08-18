@@ -59,25 +59,23 @@ SEMESTER_LABEL = os.environ.get('SEMESTER_LABEL', 'Fall 2026')
 # Keys are the values stored in Airtable's Course field and must not change —
 # renaming them would orphan every existing event. Only the labels change.
 COURSES = {
+    # Instructor names are deliberately absent — teaching assignments change,
+    # and the portal shouldn't need a redeploy when they do.
     'psc31180': {
-        'code':       'Year 1',
-        'short':      'Year 1',
-        'title':      'NYC Politics',
-        'instructor': 'Layana Abu Touq',
-        'email':      'Labutouq@ccny.cuny.edu',
-        'location':   'SH 107',
-        'meets':      'Mondays & Wednesdays, 3:30–4:45 PM',
-        'color':      '#8B1A1A',
+        'code':     'Year 1',
+        'short':    'Year 1',
+        'title':    'Politics, Power, and Policy in New York City',
+        'location': 'SH 107',
+        'meets':    'Mondays & Wednesdays, 3:30–4:45 PM',
+        'color':    '#8B1A1A',
     },
     'psc31330': {
-        'code':       'Year 2',
-        'short':      'Year 2',
-        'title':      'Philanthropy',
-        'instructor': 'Dr. Michael Miller',
-        'email':      'mmiller3@ccny.cuny.edu',
-        'location':   'NAC 4/133',
-        'meets':      'Wednesdays, 2:00–4:30 PM',
-        'color':      '#185FA5',
+        'code':     'Year 2',
+        'short':    'Year 2',
+        'title':    'Philanthropy and the Public Good',
+        'location': 'NAC 4/133',
+        'meets':    'Wednesdays, 2:00–4:30 PM',
+        'color':    '#185FA5',
     },
 }
 
@@ -263,7 +261,7 @@ def staff_user_to_dict(rec):
 
 @app.route('/')
 def index():
-    return render_template(
+    html = render_template(
         'portal.html',
         semester=SEMESTER_LABEL,
         courses=COURSES,
@@ -271,6 +269,9 @@ def index():
         current_year=date.today().year,
         asset_version=asset_version(),
     )
+    resp = app.make_response(html)
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    return resp
 
 
 @app.route('/healthz')

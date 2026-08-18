@@ -40,7 +40,7 @@ const ANN_CATS = {
 
 const ROLE_LABELS = {
   admin:       { label:'Admin',       desc:'Full access',                  color:'#8B1A1A', bg:'#f5e8e8' },
-  instructor:  { label:'Instructor',  desc:'Announcements & resources',     color:'#185FA5', bg:'#E6F1FB' },
+  instructor:  { label:'Instructor',  desc:'Announcements & resources', color:'#185FA5', bg:'#E6F1FB' },
   coordinator: { label:'Coordinator', desc:'Events & calendar',               color:'#1D9E75', bg:'#E1F5EE' },
 };
 const COURSE_LABELS = {
@@ -68,9 +68,7 @@ let adminUsers    = [];
 const COURSES = {
   psc31180: {
     id:'psc31180', code:'Year 1',
-    title:'NYC Politics',
-    instructor:'Layana Abu Touq',
-    email:'Labutouq@ccny.cuny.edu',
+    title:'Politics, Power, and Policy in New York City',
     location:'SH 107',
     meets:'Mondays & Wednesdays, 3:30–4:45 PM',
     color:'#8B1A1A', bg:'#f5e8e8',
@@ -78,9 +76,7 @@ const COURSES = {
   },
   psc31330: {
     id:'psc31330', code:'Year 2',
-    title:'Philanthropy',
-    instructor:'Dr. Michael Miller',
-    email:'mmiller3@ccny.cuny.edu',
+    title:'Philanthropy and the Public Good',
     location:'NAC 4/133',
     meets:'Wednesdays, 2:00–4:30 PM',
     color:'#185FA5', bg:'#E6F1FB',
@@ -390,7 +386,7 @@ function showView(name) {
     renderAdminEvents('all');
     const c  = COURSES[activeCourse] || COURSES.psc31180;
     const el = document.getElementById('adminCourseIndicator');
-    if (el) el.innerHTML = `${c.code} &mdash; ${c.instructor}`;
+    if (el) el.innerHTML = `${c.code} &mdash; ${c.title}`;
   }
   window.scrollTo(0,0);
 }
@@ -910,23 +906,31 @@ function getVisibleEvents() {
 }
 function eventsForDate(dateStr) { return getVisibleEvents().filter(e => e.date === dateStr); }
 
-/* The calendar opens on the current month, which reads as broken when the term
-   hasn't started yet. If this month has nothing, land on the next month that
-   does — without skipping past events the fellow may still want to see. */
+/* The calendar opens on the current month. Before term starts that month holds
+   only a stray registration deadline or two, so the grid reads as empty even
+   though nothing is wrong. Land instead on the first month from here that has a
+   real calendar, falling back to any month with anything at all. */
+const BUSY_MONTH_THRESHOLD = 5;
+
 function jumpToFirstMonthWithEvents() {
   const evs = getVisibleEvents();
   if (!evs.length) return;
-  const hasEvents = (y, m) => evs.some(e => {
+  const countIn = (y, m) => evs.filter(e => {
     const [ey, em] = (e.date || '').split('-').map(Number);
     return ey === y && em === m + 1;
-  });
-  if (hasEvents(calYear, calMonth)) return;
-  let y = calYear, m = calMonth;
-  for (let i = 0; i < 18; i++) {           // look ahead 18 months, then give up
+  }).length;
+
+  if (countIn(calYear, calMonth) >= BUSY_MONTH_THRESHOLD) return;
+
+  let y = calYear, m = calMonth, firstAny = null;
+  for (let i = 0; i < 18; i++) {
+    const n = countIn(y, m);
+    if (n && firstAny === null) firstAny = { y, m };
+    if (n >= BUSY_MONTH_THRESHOLD) { calYear = y; calMonth = m; return; }
     m += 1;
     if (m > 11) { m = 0; y += 1; }
-    if (hasEvents(y, m)) { calYear = y; calMonth = m; return; }
   }
+  if (firstAny) { calYear = firstAny.y; calMonth = firstAny.m; }
 }
 
 function renderCalendar() {
@@ -953,7 +957,7 @@ function renderCalendar() {
     const c = COURSES[calFilterCourse];
     heroMeta.textContent = c
       ? `${c.code} — ${c.title}`
-      : 'Year 1 & Year 2 — Moynihan Center Fellowship';
+      : `${COURSES.psc31180.title}  ·  ${COURSES.psc31330.title}`;
   }
   document.getElementById('calLegend').innerHTML = CATS.map(c =>
     `<div class="cal-legend-item"><span class="cal-legend-badge" style="background:${c.bg};color:${c.color};border-color:${c.color}40">${c.label}</span></div>`
