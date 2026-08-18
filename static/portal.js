@@ -179,6 +179,7 @@ function transformEvent(e) {
   return {
     ...e,
     hidden:    !!e.is_hidden,
+    onHomepage: !!e.on_homepage,
     staffOnly: !!e.is_staff_only,
   };
 }
@@ -522,9 +523,12 @@ function renderDashboard() {
     ).join('');
   }
 
-  const DELIVERABLE_CATS = new Set(['homework','milestone','application']);
+  /* The homepage list is curated, not automatic: staff tick "Show on homepage"
+     on the handful of dates fellows should notice. Everything remains on the
+     calendar regardless, so nothing is hidden by leaving it unticked. */
+  const DASH_MAX = 20;
   let dueSoon = courseEvents
-    .filter(e => DELIVERABLE_CATS.has(e.cat))
+    .filter(e => e.on_homepage)
     .sort((a,b) => a.date.localeCompare(b.date));
 
   // Apply time window filter
@@ -544,9 +548,13 @@ function renderDashboard() {
     });
   }
 
+  const totalUpcoming = dueSoon.length;
+  dueSoon = dueSoon.slice(0, DASH_MAX);
+
   const ul = document.getElementById('upcomingDeadlines');
   ul.innerHTML = dueSoon.length === 0
-    ? `<div style="font-size:13px;color:var(--gray-mid);padding:1rem 0">No deadlines ${dashWindow==='week'?'this week':dashWindow==='month'?'this month':'coming up'}.</div>`
+    ? `<div style="font-size:13px;color:var(--gray-mid);padding:1rem 0">Nothing highlighted ${dashWindow==='week'?'this week':dashWindow==='month'?'this month':'coming up'}.${
+      isStudentMode ? '' : '<br><span style="font-size:12px">Tick “Show on homepage” on an event to list it here.</span>'}</div>`
     : dueSoon.map(e => {
         const cat = catOf(e.cat);
         const cc  = accentColor(e);
@@ -579,58 +587,13 @@ function renderDashboard() {
         </div>`;
       }).join('');
 
-  const SESSION_CATS = new Set(['lecture','guest']);
-  const upcomingEvs  = courseEvents
-    .filter(e => SESSION_CATS.has(e.cat))
-    .sort((a,b) => a.date.localeCompare(b.date))
-    .slice(0, 8);
-
-  const strip = document.getElementById('upcomingEvents');
-  if (!strip) return;
-
-  function extractLoc(note) {
-    if (!note) return '';
-    const m = note.match(/(?:Location:\s*|·\s*)([A-Z][^·\n]+?)(?:\s*·|\s*$)/);
-    if (m) return m[1].trim();
-    const parts = note.split('·');
-    for (const p of parts) {
-      const t = p.trim();
-      if (/\bSH\b|\bNAC\b|\bHall\b|\bRoom\b|\bAuditorium\b|\bTheater\b|\bBallroom\b/i.test(t)) return t;
-    }
-    return '';
+  if (totalUpcoming > dueSoon.length) {
+    ul.innerHTML += `<div style="font-size:12px;color:var(--gray-mid);padding:1rem 0 0">
+      Showing the next ${dueSoon.length} of ${totalUpcoming}.
+      <a onclick="showView('calendar')" style="color:var(--maroon);cursor:pointer;text-decoration:underline">See the full calendar</a>
+    </div>`;
   }
 
-  strip.innerHTML = upcomingEvs.length === 0
-    ? `<div style="padding:1.5rem;font-size:13px;color:var(--gray-mid)">No upcoming sessions.</div>`
-    : upcomingEvs.map(e => {
-        const cat     = catOf(e.cat);
-        const cc      = accentColor(e);
-        const isJoint = e.course === 'joint';
-        const [yr,mo,dy] = e.date.split('-').map(Number);
-        const mon     = MONTHS_FULL[mo-1].slice(0,3).toUpperCase();
-        const loc     = extractLoc(e.note);
-        const typeLabel = e.cat === 'guest' ? 'Guest speaker' : isJoint ? 'Joint event' : 'Class session';
-        return `<div class="event-card-strip" onclick="showView('calendar')">
-          <div class="event-card-strip-band" style="background:${isJoint ? '#BA7517' : cat.color}"></div>
-          ${isJoint ? `<span class="event-card-strip-joint">Joint</span>` : ''}
-          ${showsRequiredMarker(e) ? `<span class="event-card-strip-required">Required</span>` : ''}
-          <div class="event-card-strip-inner">
-            <div class="event-card-strip-date">
-              <span class="event-card-strip-day">${dy}</span>
-              <span class="event-card-strip-mon">${mon}</span>
-            </div>
-            <div class="event-card-strip-type" style="color:${isJoint ? '#BA7517' : cat.color}">${typeLabel}</div>
-            <div class="event-card-strip-title">${e.title}</div>
-            ${loc ? `<div class="event-card-strip-loc">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-              ${loc}
-            </div>` : ''}
-          </div>
-        </div>`;
-      }).join('');
-
-  // Fellowship shared space section
-  renderSharedSpace();
 }
 
 function setDashWindow(w) {
@@ -638,31 +601,6 @@ function setDashWindow(w) {
   renderDashboard();
 }
 
-function renderSharedSpace() {
-  const el = document.getElementById('fellowshipSharedSpace');
-  if (!el) return;
-  // Show joint events visible to all
-  const sharedEvents = ALL_EVENTS
-    .filter(e => e.course === 'joint' && !e.hidden)
-    .sort((a,b) => a.date.localeCompare(b.date))
-    .slice(0, 5);
-  if (!sharedEvents.length) {
-    el.innerHTML = `<div style="font-size:13px;color:var(--gray-mid);padding:0.5rem 0">No upcoming shared events.</div>`;
-    return;
-  }
-  el.innerHTML = sharedEvents.map(e => {
-    const cat = catOf(e.cat);
-    const [yr,mo,dy] = e.date.split('-').map(Number);
-    const mon = MONTHS_FULL[mo-1].slice(0,3).toUpperCase();
-    return `<div class="shared-event-row">
-      <div class="shared-event-date"><span>${dy}</span><span>${mon}</span></div>
-      <div class="shared-event-body">
-        <div class="shared-event-title">${e.title}</div>
-        <div class="shared-event-cat" style="color:${cat.color}">${cat.label}</div>
-      </div>
-    </div>`;
-  }).join('');
-}
 
 
 // ── ANNOUNCEMENTS ─────────────────────────────────────────────────────────────
@@ -762,6 +700,7 @@ function readEventForm() {
     description:    document.getElementById('ev-description').value.trim(),
     eventbrite_url: document.getElementById('ev-eventbrite').value.trim(),
     required_for:   document.getElementById('ev-required-for').value,
+    on_homepage:    document.getElementById('ev-homepage').checked,
     is_staff_only:  document.getElementById('ev-staff-only').checked,
     course:         document.getElementById('ev-course').value,
   };
@@ -771,6 +710,7 @@ function clearEventForm() {
   EVENT_FIELD_IDS.forEach(id => document.getElementById(id).value = '');
   document.getElementById('ev-required-for').value = 'none';
   document.getElementById('ev-staff-only').checked = false;
+  document.getElementById('ev-homepage').checked   = false;
 }
 
 function setEventFormMode(editing) {
@@ -794,6 +734,7 @@ function startEditEvent(id) {
   document.getElementById('ev-eventbrite').value   = e.eventbrite_url || '';
   document.getElementById('ev-required-for').value = e.required_for || 'none';
   document.getElementById('ev-staff-only').checked = !!e.staffOnly;
+  document.getElementById('ev-homepage').checked   = !!e.onHomepage;
   document.getElementById('ev-course').value       = e.course || 'joint';
   setEventFormMode(true);
   document.getElementById('ev-title').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -856,6 +797,19 @@ async function adminAddEvent() {
   renderCalendar();
   renderDashboard();
   renderAdminEvents(eventsFilter);
+}
+
+async function toggleHomepage(id) {
+  const e = ALL_EVENTS.find(x => x.id === id);
+  if (!e) return;
+  const res = await api('PATCH', `/api/events/${id}`, { on_homepage: e.onHomepage ? 0 : 1 });
+  if (!res.ok) return;
+  const data = await res.json();
+  const idx = ALL_EVENTS.findIndex(x => x.id === id);
+  if (idx > -1) ALL_EVENTS[idx] = transformEvent(data);
+  updateCourseEvents();
+  renderAdminEvents(eventsFilter);
+  renderDashboard();
 }
 
 async function adminDeleteEvent(id) {
@@ -927,6 +881,7 @@ function renderAdminEvents(filter) {
         </div>
       </div>
       <div class="admin-list-actions" style="gap:6px">
+        <button class="admin-btn-secondary" style="padding:5px 10px;font-size:10px" onclick="toggleHomepage('${e.id}')" title="${e.onHomepage?'Remove from homepage':'Show on homepage'}">${e.onHomepage?'★ On homepage':'☆ Homepage'}</button>
         <button class="admin-btn-secondary" style="padding:5px 10px;font-size:10px" onclick="startEditEvent('${e.id}')">Edit</button>
         <button class="admin-btn-secondary" style="padding:5px 10px;font-size:10px" onclick="toggleEventHidden('${e.id}')">${e.hidden?'Show':'Hide'}</button>
         <button class="admin-btn-danger" onclick="adminDeleteEvent('${e.id}')">Delete</button>

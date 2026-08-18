@@ -304,6 +304,7 @@ def event_to_dict(rec):
         # Is Mandatory boolean for records predating this field.
         'required_for':   d.get('Required For')
                           or ('all' if d.get('Is Mandatory') else 'none'),
+        'on_homepage':    1 if d.get('Show On Homepage') else 0,
         'is_hidden':      1 if d.get('Is Hidden') else 0,
         'is_staff_only':  1 if d.get('Is Staff Only') else 0,
     }
@@ -529,6 +530,7 @@ def create_event():
         'Description':    data.get('description', ''),
         'Eventbrite URL': data.get('eventbrite_url', ''),
         'Required For':   data.get('required_for') or 'none',
+        'Show On Homepage': bool(data.get('on_homepage')),
         'Course':         course,
         'Is Hidden':      bool(data.get('is_hidden')),
         'Is Staff Only':  bool(data.get('is_staff_only')),
@@ -554,6 +556,7 @@ def update_event(event_id):
         'required_for':   'Required For',
     }
     bool_map = {
+        'on_homepage':   'Show On Homepage',
         'is_hidden':     'Is Hidden',
         'is_staff_only': 'Is Staff Only',
     }

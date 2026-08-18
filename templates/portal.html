@@ -168,7 +168,7 @@
         </div>
         <div>
           <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:0.5rem">
-            <div class="section-label" style="margin:0">What's due</div>
+            <div class="section-label" style="margin:0">Upcoming dates</div>
             <div id="dashWindowToggle" style="display:flex;gap:4px"></div>
           </div>
           <div class="deadline-timeline" id="upcomingDeadlines"></div>
@@ -180,16 +180,6 @@
           </button>
         </div>
       </div>
-    </div>
-    <div class="section">
-      <div class="section-label">Upcoming sessions &amp; events</div>
-      <div class="event-strip" id="upcomingEvents"></div>
-    </div>
-    <!-- Fellowship shared space — visible to all fellows -->
-    <div class="section">
-      <div class="section-label">Fellowship &mdash; {{ semester }} shared events</div>
-      <div style="font-size:12px;color:var(--gray-mid);margin-bottom:1rem">Events open to fellows in both courses.</div>
-      <div id="fellowshipSharedSpace"></div>
     </div>
   </div>
 </div>
@@ -497,6 +487,8 @@
             </select>
           </div>
           <div class="form-group" style="display:flex;align-items:center;gap:10px;margin-bottom:0">
+            <input type="checkbox" id="ev-homepage" style="width:16px;height:16px;accent-color:var(--maroon)">
+            <label for="ev-homepage" class="form-label" style="margin:0 1.25rem 0 0;cursor:pointer">Show on homepage</label>
             <input type="checkbox" id="ev-staff-only" style="width:16px;height:16px;accent-color:#7B3D8F">
             <label for="ev-staff-only" class="form-label" style="margin:0;cursor:pointer;color:#7B3D8F">Staff only (hidden from students)</label>
           </div>
