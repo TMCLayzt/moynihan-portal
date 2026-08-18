@@ -7,7 +7,6 @@ const CATS = [
   { id:'reading',     label:'Reading / prep',      color:'#1D9E75', bg:'#E1F5EE' },
   { id:'homework',    label:'Homework deadline',   color:'#D85A30', bg:'#FAECE7' },
   { id:'application', label:'Application deadline',color:'#A32D2D', bg:'#FCEBEB' },
-  { id:'guest',       label:'Guest speaker',       color:'#185FA5', bg:'#E6F1FB' },
   { id:'milestone',   label:'Events',              color:'#BA7517', bg:'#FAEEDA' },
   // CUNY academic calendar, not fellowship programming
   { id:'academic',    label:'CUNY Calendar',       color:'#6E6E73', bg:'#EDEDEE' },
@@ -19,6 +18,9 @@ CATS.forEach(c => CAT[c.id] = c);
    Calendar" category now; this alias keeps any record still tagged 'closed'
    rendering correctly without appearing twice in the legend. */
 CAT.closed = CAT.academic;
+/* 'guest' was folded into Events — a guest speaker is an event, and the title
+   already names the speaker. Aliased so older records still render. */
+CAT.guest = CAT.milestone;
 
 /* Safe lookup: an unrecognised or blank category (e.g. typed straight into
    Airtable) renders as neutral "Other" rather than mislabelling the event. */
