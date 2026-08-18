@@ -64,16 +64,16 @@ COURSES = {
     # Instructor names are deliberately absent — teaching assignments change,
     # and the portal shouldn't need a redeploy when they do.
     'psc31180': {
-        'code':     'Year 1',
-        'short':    'Year 1',
+        'code':     'Y1 NYC Politics',
+        'short':    'Y1',
         'title':    'Politics, Power, and Policy in New York City',
         'location': 'SH 107',
         'meets':    'Mondays & Wednesdays, 3:30–4:45 PM',
         'color':    '#8B1A1A',
     },
     'psc31330': {
-        'code':     'Year 2',
-        'short':    'Year 2',
+        'code':     'Y2 Philanthropy',
+        'short':    'Y2',
         'title':    'Philanthropy and the Public Good',
         'location': 'NAC 4/133',
         'meets':    'Wednesdays, 2:00–4:30 PM',

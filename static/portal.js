@@ -1,7 +1,8 @@
 // ── CONSTANTS ────────────────────────────────────────────────────────────────
 
 const CATS = [
-  { id:'lecture',     label:'Seminars',            color:'#8B1A1A', bg:'#f5e8e8' },
+  { id:'lecture',     label:'Undergrad Seminars',  color:'#8B1A1A', bg:'#f5e8e8' },
+  { id:'senior_seminar', label:'Senior Fellows Seminar', color:'#20785C', bg:'#E3F0EB' },
   { id:'meeting',     label:'Meeting / check-in',  color:'#7B3D8F', bg:'#F3EAF8' },
   { id:'reading',     label:'Reading / prep',      color:'#1D9E75', bg:'#E1F5EE' },
   { id:'homework',    label:'Homework deadline',   color:'#D85A30', bg:'#FAECE7' },
@@ -48,8 +49,8 @@ const ROLE_LABELS = {
 };
 const COURSE_LABELS = {
   both:     'Both courses',
-  psc31180: 'Year 1 only',
-  psc31330: 'Year 2 only',
+  psc31180: 'Y1 NYC Politics only',
+  psc31330: 'Y2 Philanthropy only',
   seniorfellows: 'Senior Fellows only',
 };
 
@@ -78,7 +79,7 @@ let adminUsers    = [];
 // Keys match Airtable's Course field values; only labels are display text.
 const COURSES = {
   psc31180: {
-    id:'psc31180', code:'Year 1',
+    id:'psc31180', code:'Y1 NYC Politics', short:'Y1',
     title:'Politics, Power, and Policy in New York City',
     location:'SH 107',
     meets:'Mondays & Wednesdays, 3:30–4:45 PM',
@@ -86,7 +87,7 @@ const COURSES = {
     events:[],
   },
   psc31330: {
-    id:'psc31330', code:'Year 2',
+    id:'psc31330', code:'Y2 Philanthropy', short:'Y2',
     title:'Philanthropy and the Public Good',
     location:'NAC 4/133',
     meets:'Wednesdays, 2:00–4:30 PM',
@@ -94,7 +95,7 @@ const COURSES = {
     events:[],
   },
   seniorfellows: {
-    id:'seniorfellows', code:'Senior Fellows',
+    id:'seniorfellows', code:'Senior Fellows', short:'Senior',
     title:'Moynihan Seminar',
     location:'SH-558',
     meets:'Tuesdays, 12:00–2:00 PM',
@@ -991,7 +992,8 @@ function courseColor(course) {
 }
 function courseLabel(course) {
   if (course === 'joint') return 'Joint';
-  return COURSES[course] ? COURSES[course].code : '';
+  const c = COURSES[course];
+  return c ? (c.short || c.code) : '';
 }
 
 /* CUNY academic dates and closures are tagged Course='joint' so they reach
@@ -1011,12 +1013,14 @@ function courseBadge(e) {
   return isInstitutional(e.cat) ? '' : courseLabel(e.course);
 }
 
-/* A seminar's identity is its course, not the generic "lecture" category — both
-   years' seminars are lectures, so category colour made them indistinguishable.
-   Everything else is coloured by what kind of thing it is. */
+/* A seminar's identity is its course, not its category — otherwise every
+   undergraduate seminar looked alike regardless of year. Everything else is
+   coloured by what kind of thing it is. */
+const SEMINAR_CATS = ['lecture', 'senior_seminar'];
+
 function pillColors(e) {
   const c = COURSES[e.course];
-  if (e.cat === 'lecture' && c) return { color: c.color, bg: c.bg };
+  if (SEMINAR_CATS.includes(e.cat) && c) return { color: c.color, bg: c.bg };
   const cat = catOf(e.cat);
   return { color: cat.color, bg: cat.bg };
 }
@@ -1100,7 +1104,7 @@ function renderCalendar() {
     const c = COURSES[calFilterCourse];
     heroMeta.textContent = c
       ? `${c.code} — ${c.title}`
-      : Object.values(COURSES).map(x => x.title).join('  ·  ');
+      : Object.values(COURSES).map(x => x.code).join('  ·  ');
   }
   const present = courseFilteredEvents();
   const counts  = {};

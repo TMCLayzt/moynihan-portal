@@ -24,7 +24,7 @@
   <div class="login-body">
     <!-- Fellows: one shared access code. No accounts, no personal details. -->
     <div class="login-card" id="studentLoginCard">
-      <div class="login-eyebrow">{{ semester }} &mdash; Year 1 &amp; Year 2</div>
+      <div class="login-eyebrow">{{ semester }} &mdash; {{ courses.values() | map(attribute='code') | join(' &middot; ') | safe }}</div>
       <div class="login-title">Enter the<br><strong>Fellowship Portal</strong></div>
       <div class="login-error" id="loginError">That access code is not correct.</div>
       <div class="login-field">
@@ -147,7 +147,7 @@
   <div class="page-hero">
     <div class="page-hero-inner">
       <div>
-        <div class="page-hero-meta">Year 1 &mdash; Politics, Power, and Policy in New York City</div>
+        <div class="page-hero-meta">Moynihan Center Fellowship &mdash; {{ semester }}</div>
         <h1>Welcome back, <strong>Fellow.</strong><br>{{ semester }} is underway.</h1>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px;">
@@ -293,22 +293,20 @@
           <div class="section-label">About the fellowship</div>
           <div class="about-block">
             <p>The Moynihan Center Fellowship at The City College of New York is a year-long academic and civic engagement program connecting undergraduate students to New York City&rsquo;s political landscape.</p>
-            <p>Fellows participate in two parallel tracks: <strong>Year 1 &mdash; Politics, Power, and Policy in New York City</strong> and <strong>Year 2 &mdash; Philanthropy and the Public Good</strong>.</p>
+            <p>Fellows take part across {{ courses | length }} tracks:
+              {% for c in courses.values() %}<strong>{{ c.code }} &mdash; {{ c.title }}</strong>{% if not loop.last %}, {% endif %}{% endfor %}.</p>
             <p>Through lectures, guest speakers, field experiences, and research projects, fellows develop practical skills in policy analysis, civic participation, and professional development.</p>
           </div>
 
           <div class="section-label" style="margin-top:2.5rem">Course details</div>
           <div class="about-contact-list">
+            {% for c in courses.values() %}
             <div class="about-contact-row">
-              <div class="about-contact-name">Year 1 &mdash; Politics, Power, and Policy in New York City</div>
-              <div class="about-contact-role">Mondays &amp; Wednesdays, 3:30&ndash;4:45 PM</div>
-              <div class="about-contact-email">Shepard Hall, SH 107</div>
+              <div class="about-contact-name" style="color:{{ c.color }}">{{ c.code }}</div>
+              <div class="about-contact-role">{{ c.title }}</div>
+              <div class="about-contact-email">{{ c.meets }} &middot; {{ c.location }}</div>
             </div>
-            <div class="about-contact-row">
-              <div class="about-contact-name">Year 2 &mdash; Philanthropy and the Public Good</div>
-              <div class="about-contact-role">Wednesdays, 2:00&ndash;4:30 PM</div>
-              <div class="about-contact-email">NAC 4/133</div>
-            </div>
+            {% endfor %}
           </div>
           <div class="section-label" style="margin-top:2.5rem">Contacts</div>
           <div class="about-contact-list">
@@ -457,7 +455,8 @@
           <div class="form-group"><label class="form-label">Date</label><input class="form-input" id="ev-date" type="date"></div>
           <div class="form-group"><label class="form-label">Category</label>
             <select class="form-input" id="ev-cat">
-              <option value="lecture">Lecture / class</option>
+              <option value="lecture">Undergrad Seminar (Mon/Wed)</option>
+              <option value="senior_seminar">Senior Fellows Seminar (Tue)</option>
               <option value="meeting">Meeting / check-in</option>
               <option value="guest">Guest speaker</option>
               <option value="homework">Homework deadline</option>
@@ -473,8 +472,8 @@
           <div class="form-group"><label class="form-label">Location / short note</label><input class="form-input" id="ev-note" type="text" placeholder="e.g. NAC 4/133 · 3:30–5:00 PM"></div>
           <div class="form-group"><label class="form-label">Course</label>
             <select class="form-input" id="ev-course">
-              <option value="psc31180">Year 1 — Politics, Power, and Policy in NYC</option>
-              <option value="psc31330">Year 2 — Philanthropy and the Public Good</option>
+              <option value="psc31180">Y1 NYC Politics</option>
+              <option value="psc31330">Y2 Philanthropy</option>
               <option value="seniorfellows">Senior Fellows — Moynihan Seminar</option>
               <option value="joint">Joint / both cohorts</option>
             </select>
@@ -503,9 +502,9 @@
       <div class="admin-section-title" style="margin-top:2rem;margin-bottom:1rem">All events <span id="eventsCount" style="font-weight:400;color:var(--gray-mid)"></span></div>
       <div class="admin-filter-bar">
         <button class="admin-filter active" onclick="filterEvents('all',this)">All</button>
-        <button class="admin-filter" onclick="filterEvents('psc31180',this)">Year 1</button>
-        <button class="admin-filter" onclick="filterEvents('psc31330',this)">Year 2</button>
-        <button class="admin-filter" onclick="filterEvents('seniorfellows',this)">Senior</button>
+        <button class="admin-filter" onclick="filterEvents('psc31180',this)">Y1</button>
+        <button class="admin-filter" onclick="filterEvents('psc31330',this)">Y2</button>
+        <button class="admin-filter" onclick="filterEvents('seniorfellows',this)">Senior Fellows</button>
         <button class="admin-filter" onclick="filterEvents('joint',this)">Joint</button>
       </div>
       <div id="adminEventList"></div>
@@ -617,8 +616,8 @@
           <div class="form-group"><label class="form-label">Course access</label>
             <select class="form-input" id="au-course">
               <option value="both">Both courses</option>
-              <option value="psc31180">Year 1 only</option>
-              <option value="psc31330">Year 2 only</option>
+              <option value="psc31180">Y1 NYC Politics only</option>
+              <option value="psc31330">Y2 Philanthropy only</option>
               <option value="seniorfellows">Senior Fellows only</option>
             </select>
           </div>
