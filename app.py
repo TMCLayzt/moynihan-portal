@@ -719,7 +719,8 @@ def build_ics(recs, cal_name):
             continue
 
         st, en = hhmm(f.get('Start Time')), hhmm(f.get('End Time'))
-        if st and en and en > st:
+        timed  = bool(st and en and en > st)
+        if timed:
             # A real appointment, in New York time.
             dtstart = f'DTSTART;TZID=America/New_York:{raw}T{st}'
             dtend   = f'DTEND;TZID=America/New_York:{raw}T{en}'
@@ -737,6 +738,25 @@ def build_ics(recs, cal_name):
             dtend,
             f"SUMMARY:{ics_escape(f.get('Title', ''))}",
         ]
+
+        # Free/busy. Without this, RFC 5545 defaults to OPAQUE and an all-day
+        # entry marks the whole day busy — so a college closure would make a
+        # fellow look unavailable to anyone checking their calendar. Sessions
+        # they're expected to attend should block time; notices should not.
+        # The X-MICROSOFT lines are for Outlook, which favours its own over
+        # TRANSP when working out free/busy.
+        if timed:
+            lines += [
+                'TRANSP:OPAQUE',
+                'X-MICROSOFT-CDO-BUSYSTATUS:BUSY',
+            ]
+        else:
+            lines += [
+                'TRANSP:TRANSPARENT',
+                'X-MICROSOFT-CDO-BUSYSTATUS:FREE',
+                'X-MICROSOFT-CDO-ALLDAYEVENT:TRUE',
+                'X-FUNAMBOL-ALLDAY:1',
+            ]
         location = ics_escape((f.get('Note') or '').split('·')[0].strip())
         if location:
             lines.append(f'LOCATION:{location}')
