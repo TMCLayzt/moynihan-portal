@@ -306,6 +306,7 @@ async function finishLogin(res, onFailure) {
 
   applySession(data);
   await loadPortalData();
+  jumpToFirstMonthWithEvents();
 
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('portalApp').classList.add('visible');
@@ -909,6 +910,25 @@ function getVisibleEvents() {
 }
 function eventsForDate(dateStr) { return getVisibleEvents().filter(e => e.date === dateStr); }
 
+/* The calendar opens on the current month, which reads as broken when the term
+   hasn't started yet. If this month has nothing, land on the next month that
+   does — without skipping past events the fellow may still want to see. */
+function jumpToFirstMonthWithEvents() {
+  const evs = getVisibleEvents();
+  if (!evs.length) return;
+  const hasEvents = (y, m) => evs.some(e => {
+    const [ey, em] = (e.date || '').split('-').map(Number);
+    return ey === y && em === m + 1;
+  });
+  if (hasEvents(calYear, calMonth)) return;
+  let y = calYear, m = calMonth;
+  for (let i = 0; i < 18; i++) {           // look ahead 18 months, then give up
+    m += 1;
+    if (m > 11) { m = 0; y += 1; }
+    if (hasEvents(y, m)) { calYear = y; calMonth = m; return; }
+  }
+}
+
 function renderCalendar() {
   document.getElementById('calMonthTitle').textContent = `${MONTHS_FULL[calMonth]} ${calYear}`;
   const filterBar = document.getElementById('calFilterBar');
@@ -1366,6 +1386,7 @@ async function restoreSession() {
   if (!res.ok || !data.authenticated) return false;
   applySession(data);
   await loadPortalData();
+  jumpToFirstMonthWithEvents();
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('portalApp').classList.add('visible');
   showView(isStudentMode ? 'calendar' : 'admin');

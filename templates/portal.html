@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/portal.css">
+<link rel="stylesheet" href="/static/portal.css?v={{ asset_version }}">
 </head>
 <body>
 
@@ -636,6 +636,6 @@
     publicIcsUrl: {{ public_ics_url | tojson }},
   };
 </script>
-<script src="/static/portal.js"></script>
+<script src="/static/portal.js?v={{ asset_version }}"></script>
 </body>
 </html>

@@ -172,6 +172,18 @@ def course_clause(course):
             f"{{Course}}=BLANK())")
 
 
+def asset_version():
+    """Fingerprint for static assets so a deploy can't leave a browser running
+    stale JS or CSS. Recomputed per request; the files are small."""
+    stamp = 0
+    for name in ('static/portal.js', 'static/portal.css'):
+        try:
+            stamp = max(stamp, int(os.path.getmtime(os.path.join(app.root_path, name))))
+        except OSError:
+            pass
+    return str(stamp)
+
+
 def public_ics_url():
     return f"{request.url_root.rstrip('/')}/api/calendar.ics?token={ICS_PUBLIC_TOKEN}"
 
@@ -257,6 +269,7 @@ def index():
         courses=COURSES,
         public_ics_url=public_ics_url(),
         current_year=date.today().year,
+        asset_version=asset_version(),
     )
 
 
@@ -729,6 +742,7 @@ def handle_404(e):
         courses=COURSES,
         public_ics_url=public_ics_url(),
         current_year=date.today().year,
+        asset_version=asset_version(),
     ), 404
 
 
