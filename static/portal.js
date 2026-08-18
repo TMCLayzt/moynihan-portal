@@ -1695,13 +1695,20 @@ document.addEventListener('click', e => {
    doesn't quietly sign them up to every undergraduate seminar. */
 let subscribeScope = 'all';
 
+function includeCunyChecked() {
+  const box = document.getElementById('subscribeIncludeCuny');
+  return box ? box.checked : true;
+}
+
 function getIcsUrl(scope) {
   const meta = document.querySelector('meta[name="ics-url"]');
   if (!meta) return '';
-  const base = meta.content;
-  const use  = scope === undefined ? subscribeScope : scope;
-  if (!COURSES[use]) return base;
-  return base + (base.includes('?') ? '&' : '?') + 'course=' + encodeURIComponent(use);
+  let url = meta.content;
+  const use = scope === undefined ? subscribeScope : scope;
+  const add = (k, v) => { url += (url.includes('?') ? '&' : '?') + k + '=' + encodeURIComponent(v); };
+  if (COURSES[use]) add('course', use);
+  if (!includeCunyChecked()) add('cuny', '0');
+  return url;
 }
 
 function setSubscribeScope(id) {
@@ -1723,14 +1730,18 @@ function renderSubscribeScope() {
   }
   const note = document.getElementById('subscribeScopeNote');
   if (note) {
-    const scoped = COURSES[subscribeScope]
+    let scoped = COURSES[subscribeScope]
       ? ALL_EVENTS.filter(e => appliesTo(e, subscribeScope) && !e.hidden)
       : ALL_EVENTS.filter(e => !e.hidden);
+    if (!includeCunyChecked()) scoped = scoped.filter(e => e.cat !== 'academic');
     const label = COURSES[subscribeScope]
       ? `${COURSES[subscribeScope].code} — their sessions plus anything open to all fellows`
-      : 'Every cohort’s sessions and the college calendar';
-    note.innerHTML = `<strong>${scoped.length} events.</strong> ${label}.`;
+      : 'Every cohort’s sessions';
+    note.innerHTML = `<strong>${scoped.length} entries.</strong> ${label}.`;
   }
+  // The URL changes with the checkbox too.
+  const urlBox = document.getElementById('icsUrlDisplay');
+  if (urlBox) urlBox.value = getIcsUrl();
 }
 
 function openCalSubscribeModal() {

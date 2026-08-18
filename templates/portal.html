@@ -664,6 +664,14 @@
         <div style="font-size:11px;font-weight:600;color:var(--gray-mid);letter-spacing:0.05em;text-transform:uppercase;margin-bottom:7px">Which calendar?</div>
         <div id="subscribeScopeBar" class="cal-filter-bar" style="margin-bottom:8px"></div>
         <div id="subscribeScopeNote" style="font-size:12px;color:var(--gray-mid);line-height:1.6"></div>
+        <label style="display:flex;align-items:flex-start;gap:8px;margin-top:12px;cursor:pointer">
+          <input type="checkbox" id="subscribeIncludeCuny" checked onchange="renderSubscribeScope()"
+                 style="width:15px;height:15px;accent-color:var(--maroon);margin-top:2px;flex-shrink:0">
+          <span style="font-size:12px;color:var(--gray-mid);line-height:1.5">
+            Include the college calendar &mdash; holidays, closures, exam dates and
+            registration deadlines. Useful, but it&rsquo;s most of the entries.
+          </span>
+        </label>
       </div>
       <div style="display:flex;flex-direction:column;gap:10px">
         <button class="cal-subscribe-btn" onclick="subscribeCalendar('google')">

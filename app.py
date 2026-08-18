@@ -343,10 +343,14 @@ def event_to_dict(rec):
 STUDENT_EVENT_CLAUSES = ['{Is Staff Only}!=1', '{Is Hidden}!=1']
 
 
-def build_event_formula(include_hidden_and_staff, course=''):
+def build_event_formula(include_hidden_and_staff, course='', exclude_cuny=False):
     clauses = [] if include_hidden_and_staff else list(STUDENT_EVENT_CLAUSES)
     if course in COURSES:
         clauses.append(course_clause(course))
+    if exclude_cuny:
+        # The college calendar is most of a subscription's bulk and is the least
+        # useful part in a personal calendar, so it can be left out.
+        clauses.append("{Category}!='academic'")
     if len(clauses) > 1:
         return 'AND(' + ', '.join(clauses) + ')'
     return clauses[0] if clauses else None
@@ -752,7 +756,8 @@ def calendar_feed():
 
     ?token=<ICS_STAFF_TOKEN>   all events, including staff-only
     ?token=<ICS_PUBLIC_TOKEN>  everything except staff-only
-    &course=psc31180|psc31330  optional, includes shared events too
+    &course=<cohort>           optional, includes shared events too
+    &cuny=0                    optional, leaves out the college calendar
     """
     token = request.args.get('token', '')
     if hmac.compare_digest(token.encode(), ICS_STAFF_TOKEN.encode()):
@@ -764,7 +769,9 @@ def calendar_feed():
                         status=401, mimetype='text/plain')
 
     course  = request.args.get('course', '')
-    formula = build_event_formula(include_staff_only, course)
+    # Default is to include the college calendar; only an explicit 0 drops it.
+    exclude_cuny = request.args.get('cuny', '1') == '0'
+    formula = build_event_formula(include_staff_only, course, exclude_cuny)
     recs = events_table.all(formula=formula, sort=['Date']) if formula \
         else events_table.all(sort=['Date'])
 
@@ -773,6 +780,8 @@ def calendar_feed():
     if course in COURSES:
         name += f' — {COURSES[course]["code"]}'
     name += f' — {SEMESTER_LABEL}'
+    if exclude_cuny:
+        name += ' (sessions only)'
     if include_staff_only:
         name += ' (Staff)'
     return Response(
