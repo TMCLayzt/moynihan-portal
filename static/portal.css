@@ -1224,7 +1224,8 @@ body:not(.student-mode) .student-only { display: none !important; }
 }
 .login-header-name { font-size: 15px; font-weight: 500; color: white; }
 .login-body {
-  flex: 1; display: flex; align-items: center; justify-content: center; padding: 2rem;
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; padding: 2rem;
 }
 .login-card { background: white; width: 100%; max-width: 420px; padding: 2.5rem; }
 .login-eyebrow {
@@ -1260,6 +1261,24 @@ body:not(.student-mode) .student-only { display: none !important; }
 }
 .login-btn:hover { background: var(--maroon-dark); }
 .login-hint { font-size: 11px; color: rgba(255,255,255,0.3); text-align: center; margin-top: 1.5rem; line-height: 1.8; }
+/* Switches between the fellow access-code card and the staff sign-in card. */
+.login-switch {
+  width: 100%; background: none; border: none; cursor: pointer;
+  font-family: var(--font); font-size: 11px; font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--gray-mid); padding: 12px 0 2px; margin-top: 0.75rem;
+  border-top: 1px solid var(--gray-border); transition: color 0.15s;
+}
+.login-switch:hover { color: var(--maroon); }
+/* Shown while the host wakes the app from idle, so a slow first load reads as
+   "waiting" rather than "broken". */
+.waking-notice {
+  display: none; font-size: 11px; text-align: center; margin-top: 1rem;
+  padding: 8px 12px; line-height: 1.7;
+  color: #BA7517; background: rgba(186,117,23,0.12);
+  border: 1px solid rgba(186,117,23,0.3);
+}
+.waking-notice.visible { display: block; }
 .login-footer {
   padding: 1.25rem 2rem; text-align: center; font-size: 11px;
   color: rgba(255,255,255,0.2); background: #1a1a1a; flex-shrink: 0;
