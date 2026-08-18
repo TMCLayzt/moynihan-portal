@@ -300,7 +300,10 @@ def event_to_dict(rec):
         'note':           d.get('Note', ''),
         'description':    d.get('Description', ''),
         'eventbrite_url': d.get('Eventbrite URL', ''),
-        'is_mandatory':   1 if d.get('Is Mandatory') else 0,
+        # Who must attend, as opposed to who can see it. Falls back to the old
+        # Is Mandatory boolean for records predating this field.
+        'required_for':   d.get('Required For')
+                          or ('all' if d.get('Is Mandatory') else 'none'),
         'is_hidden':      1 if d.get('Is Hidden') else 0,
         'is_staff_only':  1 if d.get('Is Staff Only') else 0,
     }
@@ -525,7 +528,7 @@ def create_event():
         'Note':           data.get('note', ''),
         'Description':    data.get('description', ''),
         'Eventbrite URL': data.get('eventbrite_url', ''),
-        'Is Mandatory':   bool(data.get('is_mandatory')),
+        'Required For':   data.get('required_for') or 'none',
         'Course':         course,
         'Is Hidden':      bool(data.get('is_hidden')),
         'Is Staff Only':  bool(data.get('is_staff_only')),
@@ -548,9 +551,9 @@ def update_event(event_id):
         'description':    'Description',
         'eventbrite_url': 'Eventbrite URL',
         'course':         'Course',
+        'required_for':   'Required For',
     }
     bool_map = {
-        'is_mandatory':  'Is Mandatory',
         'is_hidden':     'Is Hidden',
         'is_staff_only': 'Is Staff Only',
     }

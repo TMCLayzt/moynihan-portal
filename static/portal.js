@@ -113,6 +113,30 @@ const AUDIENCE_META = {
   undergrad: { label: 'Y1 & Y2',     short: 'Y1 & Y2', color: '#BA7517' },
 };
 
+/* Is this event required for the given cohort? Distinct from who can see it:
+   an event can be open to everyone but compulsory only for undergraduates. */
+function isRequiredFor(e, cohortId) {
+  const r = e.required_for || 'none';
+  if (r === 'none') return false;
+  if (r === 'all')  return true;
+  if (r === UNDERGRAD_TAG) return UNDERGRAD_COHORTS.includes(cohortId);
+  return false;
+}
+
+/* On the master calendar no single cohort is in view, so show the marker if the
+   event binds anyone — and the detail panel spells out whom. */
+function showsRequiredMarker(e) {
+  if (COURSES[calFilterCourse]) return isRequiredFor(e, calFilterCourse);
+  return (e.required_for || 'none') !== 'none';
+}
+
+function requiredForLabel(e) {
+  const r = e.required_for || 'none';
+  if (r === 'all')          return 'Required for all fellows';
+  if (r === UNDERGRAD_TAG)  return 'Required for Y1 & Y2';
+  return '';
+}
+
 /* Does this event reach the given cohort? */
 function appliesTo(e, cohortId) {
   if (e.course === cohortId)      return true;
@@ -153,7 +177,6 @@ function transformEvent(e) {
   return {
     ...e,
     hidden:    !!e.is_hidden,
-    mandatory: !!e.is_mandatory,
     staffOnly: !!e.is_staff_only,
   };
 }
@@ -532,7 +555,7 @@ function renderDashboard() {
         const mon      = MONTHS_FULL[mo-1].slice(0,3).toUpperCase();
         let daysLabel  = diffDays < 0 ? `${Math.abs(diffDays)}d ago` : diffDays === 0 ? 'Today' : `${diffDays}d away`;
         let daysClass  = diffDays <= 0 ? 'urgent' : diffDays <= 3 ? 'urgent' : diffDays <= 10 ? 'soon' : '';
-        const mandatoryBadge = e.mandatory ? `<span class="badge-mandatory">Required</span>` : '';
+        const mandatoryBadge = showsRequiredMarker(e) ? `<span class="badge-mandatory">Required</span>` : '';
         const staffBadge     = e.staffOnly  ? `<span class="badge" style="background:#F3EAF8;color:#7B3D8F;font-size:10px">Staff only</span>` : '';
         return `<div class="deadline-timeline-item">
           <div class="dtl-date">
@@ -588,7 +611,7 @@ function renderDashboard() {
         return `<div class="event-card-strip" onclick="showView('calendar')">
           <div class="event-card-strip-band" style="background:${isJoint ? '#BA7517' : cat.color}"></div>
           ${isJoint ? `<span class="event-card-strip-joint">Joint</span>` : ''}
-          ${e.mandatory ? `<span class="event-card-strip-required">Required</span>` : ''}
+          ${showsRequiredMarker(e) ? `<span class="event-card-strip-required">Required</span>` : ''}
           <div class="event-card-strip-inner">
             <div class="event-card-strip-date">
               <span class="event-card-strip-day">${dy}</span>
@@ -728,11 +751,11 @@ async function adminAddEvent() {
   const note           = document.getElementById('ev-note').value.trim();
   const description    = document.getElementById('ev-description').value.trim();
   const eventbrite_url = document.getElementById('ev-eventbrite').value.trim();
-  const is_mandatory   = document.getElementById('ev-mandatory').checked;
+  const required_for   = document.getElementById('ev-required-for').value;
   const is_staff_only  = document.getElementById('ev-staff-only').checked;
   const course         = document.getElementById('ev-course').value;
   if (!title || !date) return;
-  const res = await api('POST', '/api/events', { title, date, cat, note, description, eventbrite_url, is_mandatory, is_staff_only, course });
+  const res = await api('POST', '/api/events', { title, date, cat, note, description, eventbrite_url, required_for, is_staff_only, course });
   if (res.ok) {
     const data = await res.json();
     ALL_EVENTS.push(transformEvent(data));
@@ -743,7 +766,7 @@ async function adminAddEvent() {
     document.getElementById('ev-note').value           = '';
     document.getElementById('ev-description').value    = '';
     document.getElementById('ev-eventbrite').value     = '';
-    document.getElementById('ev-mandatory').checked    = false;
+    document.getElementById('ev-required-for').value   = 'none';
     document.getElementById('ev-staff-only').checked   = false;
     renderCalendar();
     renderDashboard();
@@ -809,7 +832,7 @@ function renderAdminEvents(filter) {
       <div class="admin-list-body">
         <div class="admin-list-title">
           ${e.title}
-          ${e.mandatory ? `<span class="badge-mandatory" style="margin-left:6px">Required</span>` : ''}
+          ${requiredForLabel(e) ? `<span class="badge-mandatory" style="margin-left:6px">${requiredForLabel(e)}</span>` : ''}
           ${e.staffOnly ? `<span class="badge" style="background:#F3EAF8;color:#7B3D8F;font-size:10px;margin-left:4px">Staff only</span>` : ''}
         </div>
         <div class="admin-list-meta">
@@ -1170,7 +1193,7 @@ function renderCalendar() {
       const cc  = accentColor(e);
       const pc = pillColors(e);
       return `<span class="cal-pill" style="background:${pc.bg};color:${pc.color};border-left:2px solid ${cc}">
-        ${e.hidden?'[hidden] ':''}${e.mandatory?'★ ':''}${e.title}
+        ${e.hidden?'[hidden] ':''}${showsRequiredMarker(e)?'★ ':''}${e.title}
       </span>`;
     }).join('');
     const more = evs.length > maxShow ? `<span class="cal-more">+${evs.length-maxShow} more</span>` : '';
@@ -1240,7 +1263,11 @@ function renderDayBody(dateStr) {
     const adminBadges = !isStudentMode ? `
       ${e.hidden ? `<span class="admin-status-chip" style="background:#333;color:#ccc;margin-right:4px">Hidden</span>` : ''}
     ` : '';
-    const mandatoryBadge = e.mandatory  ? `<span class="badge-mandatory" style="margin-left:4px">Required</span>` : '';
+    const reqLabel = requiredForLabel(e);
+    const mandatoryBadge = showsRequiredMarker(e)
+      ? `<span class="badge-mandatory" style="margin-left:4px" title="${reqLabel}">${
+          COURSES[calFilterCourse] ? 'Required' : reqLabel}</span>`
+      : '';
     const staffOnlyBadge = e.staffOnly  ? `<span class="badge" style="background:#F3EAF8;color:#7B3D8F;font-size:10px;margin-left:4px">Staff only</span>` : '';
     const calBtn  = `<button class="btn-sm" onclick="downloadIcs('${e.id}')" style="margin-top:8px;font-size:11px;display:inline-flex;align-items:center;gap:5px">📅 Add to calendar</button>`;
     const ebBtn   = e.eventbrite_url ? `<a href="${e.eventbrite_url}" target="_blank" rel="noopener" class="btn-sm btn-primary" style="margin-top:8px;font-size:11px;display:inline-flex;align-items:center;gap:5px;text-decoration:none">🎟 RSVP / Register ↗</a>` : '';
@@ -1305,8 +1332,12 @@ function showAddForm() {
         <input class="form-input" id="fEventbrite" type="url" placeholder="Google Form, Eventbrite, Calendly…">
       </div>
       <div class="form-group" style="display:flex;align-items:center;gap:10px">
-        <input type="checkbox" id="fMandatory" style="width:16px;height:16px;accent-color:var(--maroon)">
-        <label for="fMandatory" class="form-label" style="margin:0;cursor:pointer">Mark as required / mandatory</label>
+        <label for="fRequiredFor" class="form-label" style="margin:0">Attendance</label>
+        <select class="form-input" id="fRequiredFor" style="max-width:230px">
+          <option value="none">Optional for everyone</option>
+          <option value="undergrad">Required for Y1 &amp; Y2</option>
+          <option value="all">Required for all fellows</option>
+        </select>
       </div>
     </div>`;
   document.getElementById('panelFooter').style.display = 'block';
@@ -1334,10 +1365,10 @@ async function saveEvent() {
   const note           = document.getElementById('fNote').value.trim();
   const description    = document.getElementById('fDesc').value.trim();
   const eventbrite_url = document.getElementById('fEventbrite').value.trim();
-  const is_mandatory   = document.getElementById('fMandatory').checked;
+  const required_for   = document.getElementById('fRequiredFor').value;
   if (!title || !date) { document.getElementById('fTitle').style.borderColor = '#A32D2D'; return; }
   const course = activeCourse === 'all' ? 'joint' : activeCourse;
-  const res = await api('POST', '/api/events', { title, date, cat, note, description, eventbrite_url, is_mandatory, course });
+  const res = await api('POST', '/api/events', { title, date, cat, note, description, eventbrite_url, required_for, course });
   if (res.ok) {
     const data = await res.json();
     ALL_EVENTS.push(transformEvent(data));
