@@ -1851,10 +1851,13 @@ body:not(.student-mode) .student-only { display: none !important; }
 }
 .contact-routing-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1.1fr 1fr;
   gap: 1.5rem;
-  padding: 0.9rem 0;
+  padding: 0.8rem 0;
   border-bottom: 1px solid #eceae6;
+}
+@media (max-width: 700px) {
+  .contact-routing-row { grid-template-columns: 1fr; gap: 0.3rem; }
 }
 .contact-routing-topic {
   font-size: 13px;
@@ -1868,6 +1871,22 @@ body:not(.student-mode) .student-only { display: none !important; }
 }
 .contact-routing-who a { color: var(--maroon); text-decoration: none; }
 .contact-routing-who a:hover { text-decoration: underline; }
-@media (max-width: 640px) {
-  .contact-routing-row { grid-template-columns: 1fr; gap: 0.35rem; }
+
+
+
+/* ── STAFF DIRECTORY ─────────────────────────────────────────────────────────
+   Wraps across the available width so nine people don't make a tall column.
+   Course details reuses the same classes, where three cohorts give three across. */
+.about-contact-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 0.25rem 2rem;
+}
+/* Course names and meeting times need more room than a name and an email. */
+.about-contact-list--wide {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+.about-contact-row {
+  padding: 0.7rem 0;
+  border-bottom: 1px solid #eceae6;
 }

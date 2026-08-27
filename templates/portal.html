@@ -273,40 +273,12 @@
           </div>
 
           <div class="section-label" style="margin-top:2.5rem">Course details</div>
-          <div class="about-contact-list">
+          <div class="about-contact-list about-contact-list--wide">
             {% for c in courses.values() %}
             <div class="about-contact-row">
               <div class="about-contact-name" style="color:{{ c.color }}">{{ c.code }}</div>
               <div class="about-contact-role">{{ c.title }}</div>
               <div class="about-contact-email">{{ c.meets }} &middot; {{ c.location }}</div>
-            </div>
-            {% endfor %}
-          </div>
-          <div class="section-label" style="margin-top:2.5rem">Who to contact</div>
-          <div style="font-size:12px;color:var(--gray-mid);margin-bottom:1rem;line-height:1.7">
-            Not sure who to ask? Write to
-            <a href="mailto:{{ general_contact }}" style="color:var(--maroon)">{{ general_contact }}</a>
-            and it will reach the right person.
-          </div>
-          <div class="contact-routing">
-            {% for topic, who, email in contact_routing %}
-            <div class="contact-routing-row">
-              <div class="contact-routing-topic">{{ topic }}</div>
-              <div class="contact-routing-who">
-                {{ who }}<br>
-                <a href="mailto:{{ email }}">{{ email }}</a>
-              </div>
-            </div>
-            {% endfor %}
-          </div>
-
-          <div class="section-label" style="margin-top:2.5rem">Programme staff</div>
-          <div class="about-contact-list">
-            {% for name, title, email in staff_directory %}
-            <div class="about-contact-row">
-              <div class="about-contact-name">{{ name }}</div>
-              <div class="about-contact-role">{{ title }}</div>
-              <div class="about-contact-email"><a href="mailto:{{ email }}">{{ email }}</a></div>
             </div>
             {% endfor %}
           </div>
@@ -339,6 +311,32 @@
           </div>
         </div>
       </div>
+
+      <div class="section-label" style="margin-top:2.5rem">Who to contact</div>
+      <div style="font-size:12px;color:var(--gray-mid);margin-bottom:1rem;line-height:1.7">
+        Not sure who to ask? Write to
+        <a href="mailto:{{ general_contact }}" style="color:var(--maroon)">{{ general_contact }}</a>
+        and it will reach the right person.
+      <div class="contact-routing">
+        {% for topic, who, email in contact_routing %}
+        <div class="contact-routing-row">
+          <div class="contact-routing-topic">{{ topic }}</div>
+          <div class="contact-routing-who">
+            {{ who }}<br>
+            <a href="mailto:{{ email }}">{{ email }}</a>
+          </div>
+        </div>
+        {% endfor %}
+
+      <div class="section-label" style="margin-top:2.5rem">Programme staff</div>
+      <div class="about-contact-list">
+        {% for name, title, email in staff_directory %}
+        <div class="about-contact-row">
+          <div class="about-contact-name">{{ name }}</div>
+          <div class="about-contact-role">{{ title }}</div>
+          <div class="about-contact-email"><a href="mailto:{{ email }}">{{ email }}</a></div>
+        </div>
+        {% endfor %}
 
       <!-- Admin manual section -->
       <div class="admin-only" style="margin-top:4rem">
