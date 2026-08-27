@@ -848,7 +848,8 @@ def create_announcement():
     rec = announcements_table.create({
         'Title':      title,
         'Body':       body,
-        'Category':   data.get('category', 'general'),
+        # 'color' is the old key; accepted so a cached script still works.
+        'Category':   data.get('category') or data.get('color') or 'general',
         'Show Until': (data.get('show_until') or '') or None,
         'Is Pinned':  bool(data.get('is_pinned')),
         'Created At': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.000Z'),

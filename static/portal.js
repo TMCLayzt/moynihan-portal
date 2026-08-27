@@ -664,11 +664,11 @@ function renderAdminAnnouncements() {
 async function addAnnouncement() {
   const title    = document.getElementById('ann-title').value.trim();
   const body     = document.getElementById('ann-body').value.trim();
-  const color    = document.getElementById('ann-color').value;
+  const category = document.getElementById('ann-color').value;
   const show_until = document.getElementById('ann-until').value;
   const is_pinned  = document.getElementById('ann-pinned').checked;
   if (!title || !body) return;
-  const res = await api('POST', '/api/announcements', { title, body, color, show_until, is_pinned });
+  const res = await api('POST', '/api/announcements', { title, body, category, show_until, is_pinned });
   if (res.ok) {
     const data = await res.json();
     announcements.unshift(data);
