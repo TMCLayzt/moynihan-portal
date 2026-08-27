@@ -58,6 +58,22 @@ const COURSE_LABELS = {
 };
 
 
+/* The order categories are shown in. Sorting by the raw key put Academic above
+   General, which isn't a useful reading order. */
+const RESOURCE_CAT_ORDER = ['general', 'finance', 'academic', 'survey', 'forms', 'housing'];
+
+function orderedCategories(list) {
+  const present = [...new Set(list.map(r => r.category))];
+  return [
+    ...RESOURCE_CAT_ORDER.filter(c => present.includes(c)),
+    ...present.filter(c => !RESOURCE_CAT_ORDER.includes(c)).sort(),
+  ];
+}
+
+function byOrder(a, b) {
+  return (a.order_index || 0) - (b.order_index || 0);
+}
+
 const RESOURCE_CATS = {
   general:  { label:'General',         color:'#6b6b6b' },
   finance:  { label:'Finance & Stipends', color:'#1D9E75' },
@@ -1519,7 +1535,7 @@ function renderResources() {
     ? live.filter(r => resourceAppliesTo(r, resFilterCourse))
     : live;
 
-  const cats = [...new Set(shown.map(r => r.category))];
+  const cats = orderedCategories(shown);
   if (!shown.length) {
     el.innerHTML = `<div style="font-size:13px;color:var(--gray-mid);padding:2rem 0;text-align:center">No resources added yet.<br><span style="font-size:12px">Your instructor will add links to forms, guides, and documents here.</span></div>`;
     return;
@@ -1536,7 +1552,7 @@ function renderResources() {
 
   el.innerHTML = cats.map(cat => {
     const cl    = RESOURCE_CATS[cat] || { label: cat, color: '#6b6b6b' };
-    const items = shown.filter(r => r.category === cat);
+    const items = shown.filter(r => r.category === cat).sort(byOrder);
     return `<div class="resource-cat-section" id="res-cat-${cat}">
       <div class="resource-cat-title" style="color:${cl.color}">${cl.label}</div>
       <div class="resource-items-grid">
@@ -1560,8 +1576,18 @@ function renderAdminResources() {
     el.innerHTML = '<p style="color:var(--gray-mid);font-size:13px;padding:1rem 0">No resources yet.</p>';
     return;
   }
-  el.innerHTML = resources.map(r => {
+  const sorted = orderedCategories(resources).flatMap(cat =>
+    resources.filter(r => r.category === cat).sort(byOrder));
+
+  el.innerHTML = sorted.map(r => {
     const cl = RESOURCE_CATS[r.category] || { label: r.category, color: '#6b6b6b' };
+    const sibs  = sorted.filter(x => x.category === r.category);
+    const pos   = sibs.findIndex(x => x.id === r.id);
+    const first = pos === 0;
+    const last  = pos === sibs.length - 1;
+    const arrow = (dir, glyph, disabled, label) =>
+      `<button class="admin-btn-secondary" style="padding:5px 9px;font-size:11px;line-height:1${disabled ? ';opacity:0.25;cursor:default' : ''}"
+               ${disabled ? 'disabled' : `onclick="moveResource('${r.id}', ${dir})"`} title="${label}">${glyph}</button>`;
     return `<div class="admin-list-row" style="${r.is_active ? '' : 'opacity:0.55'}">
       <div class="admin-list-accent" style="background:${cl.color}"></div>
       <div class="admin-list-body">
@@ -1578,6 +1604,8 @@ function renderAdminResources() {
         ${r.description ? `<div class="admin-list-meta" style="margin-top:3px">${r.description.slice(0,80)}${r.description.length>80?'…':''}</div>` : ''}
       </div>
       <div class="admin-list-actions" style="gap:6px">
+        ${arrow(-1, '&uarr;', first, 'Move up')}
+        ${arrow(1,  '&darr;', last,  'Move down')}
         <button class="admin-btn-secondary" style="padding:5px 10px;font-size:10px" onclick="toggleResourceActive('${r.id}')">${r.is_active ? 'Hide' : 'Show'}</button>
         <button class="admin-btn-secondary" style="padding:5px 10px;font-size:10px" onclick="startEditResource('${r.id}')">Edit</button>
         <button class="admin-btn-danger" onclick="deleteResource('${r.id}')">Delete</button>
@@ -1635,6 +1663,31 @@ function cancelEditResource() {
   editingResourceId = null;
   clearResourceForm();
   setResourceFormMode(false);
+}
+
+/* Move an item up or down within its category. Renumbers the whole category
+   sequentially rather than swapping two values, so duplicate or sparse indices
+   sort themselves out instead of making a move silently do nothing. */
+async function moveResource(id, direction) {
+  const target = resources.find(r => r.id === id);
+  if (!target) return;
+  const sibs = resources.filter(r => r.category === target.category).sort(byOrder);
+  const i = sibs.findIndex(r => r.id === id);
+  const j = i + direction;
+  if (i < 0 || j < 0 || j >= sibs.length) return;
+  [sibs[i], sibs[j]] = [sibs[j], sibs[i]];
+
+  const results = await Promise.all(sibs.map((r, idx) =>
+    api('PATCH', `/api/resources/${r.id}`, { order_index: idx + 1 })));
+  if (results.some(res => !res.ok)) { alert('Could not reorder those.'); return; }
+
+  const updated = await Promise.all(results.map(res => res.json()));
+  updated.forEach(u => {
+    const k = resources.findIndex(r => r.id === u.id);
+    if (k > -1) resources[k] = u;
+  });
+  renderAdminResources();
+  renderResources();
 }
 
 async function toggleResourceActive(id) {

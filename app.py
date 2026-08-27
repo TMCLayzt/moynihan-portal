@@ -946,6 +946,11 @@ def update_resource(res_id):
         updates['Is Required'] = bool(data['is_required'])
     if 'is_active' in data:
         updates['Is Active'] = bool(data['is_active'])
+    if 'order_index' in data:
+        try:
+            updates['Order Index'] = int(data['order_index'])
+        except (TypeError, ValueError):
+            return jsonify({'error': 'Order must be a whole number.'}), 400
     if not updates:
         return jsonify({'error': 'Nothing to update.'}), 400
     return jsonify(resource_to_dict(
