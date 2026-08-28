@@ -319,12 +319,16 @@
         and it will reach the right person.
       </div>
       <div class="contact-routing">
-        {% for topic, who, email in contact_routing %}
+        {% for topic, people in contact_routing %}
         <div class="contact-routing-row">
           <div class="contact-routing-topic">{{ topic }}</div>
           <div class="contact-routing-who">
-            {{ who }}<br>
-            <a href="mailto:{{ email }}">{{ email }}</a>
+            {% for who, email in people %}
+            <div{% if not loop.first %} style="margin-top:0.55rem"{% endif %}>
+              {{ who }}<br>
+              <a href="mailto:{{ email }}">{{ email }}</a>
+            </div>
+            {% endfor %}
           </div>
         </div>
         {% endfor %}

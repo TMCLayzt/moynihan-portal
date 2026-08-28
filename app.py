@@ -117,19 +117,32 @@ STAFF_DIRECTORY = [
 
 GENERAL_CONTACT = 'moynihancenter@ccny.cuny.edu'
 
-# Where to send a given question. Only routes that follow directly from a job
-# title — anything else would be guesswork a fellow would act on.
+# Where to send a given question. Each topic can list more than one person.
+# Only routes the programme has actually specified — guessing who handles what
+# would be worse than leaving a topic off, since a fellow acts on this.
 CONTACT_ROUTING = [
-    ('Anything general, or if you are not sure who to ask',
-     'Moynihan Center', GENERAL_CONTACT),
-    ('Your fellowship, placement, or seminar',
-     'Layana Abu Touq — Assistant Director, Fellowships', 'labutouq@ccny.cuny.edu'),
-    ('Logistics, rooms, and operations',
-     'Selena Rodriguez — Assistant Director, Operations', 'srodriguez5@ccny.cuny.edu'),
-    ('Events, scheduling, and day-to-day programme questions',
-     'Eliana Blam — Program Coordinator', 'eblam@ccny.cuny.edu'),
-    ('Press, social media, and communications',
-     'Catherine Lovizio — Communications Coordinator', 'catherine.lovizio10@login.cuny.edu'),
+    ('Anything general, or if you are not sure who to ask', [
+        ('Moynihan Center', GENERAL_CONTACT),
+    ]),
+    ('Senior Fellowships', [
+        ('Michael Miller — Managing Director',           'mmiller3@ccny.cuny.edu'),
+        ('Carlo Invernizzi-Accetti — Executive Director', 'caccetti@ccny.cuny.edu'),
+    ]),
+    ('Undergraduate Fellowships', [
+        ('Layana Abu Touq — Assistant Director, Fellowships', 'labutouq@ccny.cuny.edu'),
+    ]),
+    ('Public Scholars seminar participation and mentorship, for undergraduate fellows', [
+        ('Leanna K. Carroll — Fellowship Relations Manager', 'lcarroll@ccny.cuny.edu'),
+    ]),
+    ('Logistics, rooms, and operations', [
+        ('Selena Rodriguez — Assistant Director, Operations', 'srodriguez5@ccny.cuny.edu'),
+    ]),
+    ('Events, scheduling, and day-to-day programme questions', [
+        ('Eliana Blam — Program Coordinator', 'eblam@ccny.cuny.edu'),
+    ]),
+    ('Press, social media, and communications', [
+        ('Catherine Lovizio — Communications Coordinator', 'catherine.lovizio10@login.cuny.edu'),
+    ]),
 ]
 
 STAFF_ROLES = ('admin', 'instructor', 'coordinator')
