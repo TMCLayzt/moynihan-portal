@@ -382,7 +382,7 @@ async function finishLogin(res, onFailure) {
 
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('portalApp').classList.add('visible');
-  showView(isStudentMode ? 'calendar' : 'admin');
+  showView(isStudentMode ? 'dashboard' : 'admin');
 }
 
 /* Shared by a fresh sign-in and by restoring an existing session on reload. */
@@ -1907,7 +1907,7 @@ async function restoreSession() {
   jumpToFirstMonthWithEvents();
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('portalApp').classList.add('visible');
-  showView(isStudentMode ? 'calendar' : 'admin');
+  showView(isStudentMode ? 'dashboard' : 'admin');
   return true;
 }
 
