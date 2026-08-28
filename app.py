@@ -131,7 +131,7 @@ CONTACT_ROUTING = [
     ('Undergraduate Fellowships', [
         ('Layana Abu Touq — Assistant Director, Fellowships', 'labutouq@ccny.cuny.edu'),
     ]),
-    ('Public Scholars seminar participation and mentorship, for undergraduate fellows', [
+    ('Mentorship', [
         ('Leanna K. Carroll — Fellowship Relations Manager', 'lcarroll@ccny.cuny.edu'),
     ]),
     ('Logistics, rooms, and operations', [
