@@ -317,6 +317,7 @@
         Not sure who to ask? Write to
         <a href="mailto:{{ general_contact }}" style="color:var(--maroon)">{{ general_contact }}</a>
         and it will reach the right person.
+      </div>
       <div class="contact-routing">
         {% for topic, who, email in contact_routing %}
         <div class="contact-routing-row">
@@ -327,6 +328,7 @@
           </div>
         </div>
         {% endfor %}
+      </div>
 
       <div class="section-label" style="margin-top:2.5rem">Programme staff</div>
       <div class="about-contact-list">
@@ -337,6 +339,7 @@
           <div class="about-contact-email"><a href="mailto:{{ email }}">{{ email }}</a></div>
         </div>
         {% endfor %}
+      </div>
 
       <!-- Admin manual section -->
       <div class="admin-only" style="margin-top:4rem">
