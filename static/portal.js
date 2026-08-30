@@ -134,6 +134,7 @@ function isRequiredFor(e, cohortId) {
   if (r === 'none') return false;
   if (r === 'all')  return true;
   if (r === UNDERGRAD_TAG) return UNDERGRAD_COHORTS.includes(cohortId);
+  if (COURSES[r])   return r === cohortId;   // bound to one cohort
   return false;
 }
 
@@ -148,7 +149,18 @@ function requiredForLabel(e) {
   const r = e.required_for || 'none';
   if (r === 'all')          return 'Required for all fellows';
   if (r === UNDERGRAD_TAG)  return 'Required for Y1 & Y2';
+  if (COURSES[r])           return `Required for ${COURSES[r].code}`;
   return '';
+}
+
+/* Built from COURSES so a new cohort appears in the form without editing it. */
+function attendanceOptions(selected) {
+  const opts = [['none', 'Optional for everyone']]
+    .concat(Object.values(COURSES).map(c => [c.id, `Required for ${c.code}`]))
+    .concat([[UNDERGRAD_TAG, 'Required for Y1 & Y2 (not Senior Fellows)'],
+             ['all',         'Required for all fellows']]);
+  return opts.map(([v, label]) =>
+    `<option value="${v}"${v === selected ? ' selected' : ''}>${label}</option>`).join('');
 }
 
 /* Does this event reach the given cohort? */
@@ -754,6 +766,13 @@ function setEventFormMode(editing) {
   if (btn)    btn.textContent = editing ? 'Save changes' : 'Add event';
   if (cancel) cancel.style.display = editing ? '' : 'none';
   if (head)   head.textContent = editing ? 'Editing event' : 'New event';
+}
+
+/* The template can't know the cohort list, so populate the admin form's
+   attendance choices once the page is ready. */
+function populateAttendanceSelect() {
+  const el = document.getElementById('ev-required-for');
+  if (el) el.innerHTML = attendanceOptions(el.value || 'none');
 }
 
 function startEditEvent(id) {
@@ -1408,11 +1427,7 @@ function showAddForm() {
       </div>
       <div class="form-group" style="display:flex;align-items:center;gap:10px">
         <label for="fRequiredFor" class="form-label" style="margin:0">Attendance</label>
-        <select class="form-input" id="fRequiredFor" style="max-width:230px">
-          <option value="none">Optional for everyone</option>
-          <option value="undergrad">Required for Y1 &amp; Y2</option>
-          <option value="all">Required for all fellows</option>
-        </select>
+        <select class="form-input" id="fRequiredFor" style="max-width:260px">${attendanceOptions('none')}</select>
       </div>
     </div>`;
   document.getElementById('panelFooter').style.display = 'block';
@@ -1912,6 +1927,7 @@ async function restoreSession() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  populateAttendanceSelect();
   const userEl = document.getElementById('loginUser');
   if (userEl) {
     userEl.addEventListener('keydown', e => {
